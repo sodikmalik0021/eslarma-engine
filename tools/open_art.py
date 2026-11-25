@@ -5,7 +5,9 @@ import json, os, subprocess, sys, time
 
 # CLIP reads only 77 tokens: the style comes first and stays short, the visual must be <= 35 words
 # no "storybook" / "paper" / "book" words here: the model then paints pages with gibberish
-STYLE = "{palette}, fine watercolor and ink painting, full bleed scene of: "
+STYLES = {"watercolor": "fine watercolor and ink painting", "oil": "rich oil painting with visible brush strokes", "gouache": "soft gouache storybook illustration",
+          "miniature": "Persian miniature painting, ornate", "cinematic": "cinematic realistic digital painting, dramatic light", "pencil": "detailed colored pencil drawing"}
+STYLE = "{palette}, {style}, full bleed scene of: "
 PALETTES = {"golden": "golden afternoon light, ochre and olive", "rose": "dusty rose sunset light, mauve and peach", "mint": "fresh morning light, sage green and cream",
             "night": "moonlit evening, indigo and warm lantern light", "desert": "warm sand, terracotta and turquoise", "rain": "soft overcast light, blue-grey and amber",
             "spring": "bright spring light, soft green and white", "amber": "deep amber and teal evening light"}
@@ -91,7 +93,7 @@ def generate(items, out, w=704, h=1216, budget=95 * 60):
     import torch
     t0, per = time.time(), 0
     clip, scores, tries, faces = Clip(), {}, {}, set()
-    st = [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"])) for it in items]
+    st = [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"]), style=STYLES.get(it.get("style"), STYLES["watercolor"])) for it in items]
     n = len(items)
     plain = [[it["prompt"], faceless(it["prompt"])] + list(it.get("alts") or [])[:2] for it in items]
     flat = encode(p, [s + x for s, v in zip(st, plain) for x in v])

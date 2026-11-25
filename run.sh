@@ -57,7 +57,7 @@ EOF
   done
   rm -rf /tmp/media; pg worktree prune
   pg fetch -q --depth 1 origin refs/heads/media && pg worktree add -q --detach /tmp/media FETCH_HEAD || { fail "сохранение видео"; return 1; }
-  mkdir -p /tmp/media/out; cp out/eslarma_$ID.mp4 /tmp/media/out/; cp out/qa_$ID.jpg /tmp/media/out/ 2>/dev/null
+  mkdir -p /tmp/media/out; cp out/eslarma_$ID.mp4 /tmp/media/out/; cp out/qa_$ID.jpg out/cover_$ID.jpg /tmp/media/out/ 2>/dev/null
   (cd /tmp/media && git add -A out && git commit -qm "media: eslarma_$ID (engine)" && git push -q origin HEAD:refs/heads/media) || { fail "сохранение видео"; return 1; }
   save "engine: plan + QA $ID" data || true
   fresh

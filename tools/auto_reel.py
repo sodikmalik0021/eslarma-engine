@@ -7,7 +7,7 @@
 Env: GEMINI_API_KEY (free key from aistudio.google.com), optional GEMINI_MODEL.
 """
 import re
-import json, os, subprocess, sys, urllib.request, hashlib
+import json, os, subprocess, sys, time, urllib.error, urllib.request, hashlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "studio"))
@@ -54,7 +54,40 @@ def local_llm(prompt, num_predict=2500, temperature=0.3):
     return json.loads(d["response"]), "local:" + model
 
 
+def remote_llm(prompt, num_predict=2500):
+    """the owner's strong free model (key lives in Supabase); None when it is not connected"""
+    try:
+        c = json.load(open(os.path.join(ROOT, "data/llm.json"), encoding="utf-8"))
+    except Exception:
+        return None, None
+    for k in range(3):
+        try:
+            r = urllib.request.Request(c["url"], data=json.dumps({"prompt": prompt, "max": num_predict}).encode(),
+                                       headers={"Content-Type": "application/json", "x-token": c["token"]})
+            with urllib.request.urlopen(r, timeout=150) as x:
+                d = json.load(x)
+            t = d["text"]
+            return json.loads(t[t.index("{"):t.rindex("}") + 1]), "cloud:" + d.get("model", "?")
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 404, 503):  # not connected
+                return None, None
+        except Exception as e:
+            print("cloud model:", str(e)[:120])
+        time.sleep(25 * (k + 1))
+    return None, None
+
+
 def ask(prompt, check, num_predict=2500):
+    r, m = remote_llm(prompt, num_predict)
+    try:
+        if r and check(r):
+            return r, m
+    except Exception:
+        pass
+    return ask_free(prompt, check, num_predict)
+
+
+def ask_free(prompt, check, num_predict=2500):
     """Gemini first if it answers (much stronger), else the local model twice. Returns (result, model) or (None, None)."""
     if os.environ.get("GEMINI_API_KEY"):
         try:  # free tier is overloaded in bursts (run 45250587695: 503 in plan, answered 20 min later in QA) -> 2 rounds
@@ -263,6 +296,14 @@ def safe_visual(v):
     return v if 5 <= len(v.split()) <= 45 and not any(b in v.lower() + " " for b in BANNED) else ""
 
 
+def owner_wishes():
+    try:
+        n = json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("wishes") or []
+        return "\nThe owner's wishes about the pictures: " + " | ".join(str(x)[:200] for x in n[-6:]) if n else ""
+    except Exception:
+        return ""
+
+
 def phrases_of(tpath, subs):
     """split the corrected text at commas / every ~6 words; times come from the whisper word map"""
     from plan_util import build_words2
@@ -352,7 +393,7 @@ def cmd_plan(src):
         raise SystemExit("planner: no valid hook/caption from any model")
     models.add(mm)
     plan = {k: meta.get(k) for k in ("topic", "metaphor", "hook", "caption", "comment")}
-    if str(mm).startswith("local"):  # a small model must not write Uzbek or Arabic of its own: only the speaker's words + fixed phrases
+    if not str(mm).startswith("gemini-"):  # a small model must not write Uzbek or Arabic of its own: only the speaker's words + fixed phrases
         lines = hook_lines(subs)
         hk = None
         if lines:
@@ -379,7 +420,8 @@ def cmd_plan(src):
     free = [p for p in open_art.PALETTES if p not in used_pal]
     plan["palette"] = free[int(hashlib.md5(rid.encode()).hexdigest(), 16) % len(free)]
     plan["planned_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    r, m = ask(f"{PICK_RULES}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
+    wish = owner_wishes()
+    r, m = ask(f"{PICK_RULES}{wish}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
     if not r:
         raise SystemExit("planner: no model could pick scenes")  # never guess pictures
     models.add(m)
@@ -474,7 +516,7 @@ def paint(plan, shots, rid):
     import art_prompts
     out, pj = f"/tmp/art_{rid}", f"/tmp/art_{rid}.json"
     seed = int(hashlib.md5((rid + str(plan.get("planned_at"))).encode()).hexdigest()[:6], 16)
-    json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
+    json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "style": art_style(), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
     try:  # free the local planner model's memory first
         urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=json.dumps(
             {"model": os.environ.get("LOCAL_MODEL", "gemma3:4b"), "keep_alive": 0}).encode(), headers={"Content-Type": "application/json"}), timeout=30).read()
@@ -525,6 +567,49 @@ def art_shot(jpg, name, i, s):
             "cam": {"zoom": list(zoom), "focus": list(focus)}}
 
 
+def art_style():
+    try:
+        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "watercolor"
+    except Exception:
+        return "watercolor"
+
+
+def make_cover(plan, jpg, rid):
+    """1080x1920 cover: the first painting, darkened, with the title inside the 3:4 part that the profile grid shows"""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+    im = Image.open(jpg).convert("RGB")
+    k = max(1080 / im.width, 1920 / im.height)
+    im = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+    x, y = (im.width - 1080) // 2, (im.height - 1920) // 2
+    im = ImageEnhance.Color(im.crop((x, y, x + 1080, y + 1920))).enhance(1.1)
+    sh = Image.new("L", (1, 1920))
+    for j in range(1920):
+        sh.putpixel((0, j), int(60 + 165 * max(0, min(1, (j - 760) / 620)) - 120 * max(0, (j - 1560) / 360)))
+    im = Image.composite(Image.new("RGB", im.size, (10, 26, 20)), im, sh.resize(im.size))
+    d = ImageDraw.Draw(im)
+    words, size = plan["hook"].split(), 124
+    while True:
+        f = ImageFont.truetype("/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf", size)
+        lines, cur = [], ""
+        for w in words:
+            t = (cur + " " + w).strip()
+            if not cur or f.getlength(t) <= 900:
+                cur = t
+            else:
+                lines.append(cur); cur = w
+        lines.append(cur)
+        if (len(lines) <= 4 and max(f.getlength(l) for l in lines) <= 920) or size <= 60:
+            break
+        size -= 6
+    lh = int(size * 1.16)
+    y0 = 1500 - lh * len(lines)
+    d.rounded_rectangle([80, y0 - 56, 220, y0 - 44], radius=6, fill=(226, 184, 79))
+    for j, l in enumerate(lines):
+        d.text((80, y0 + j * lh), l, font=f, fill=(255, 250, 238))
+    d.text((80, 1530), "@eslarma.uz", font=ImageFont.truetype("/usr/share/fonts/opentype/inter/Inter-SemiBold.otf", 44), fill=(246, 228, 180))
+    im.save(os.path.join(ROOT, "out", f"cover_{rid}.jpg"), quality=92)
+
+
 LIVE = (("stream", "water flows and sparkles"), ("water", "water moves and glitters"), ("tree", "leaves sway in the wind"), ("orchard", "branches sway, petals fall"),
         ("lantern", "the flame flickers"), ("lamp", "the flame flickers"), ("bird", "birds move and flap"), ("field", "grass waves in the wind"),
         ("walking", "the man walks forward step by step"), ("rain", "rain falls"), ("snow", "snow falls"), ("car", "the car drives forward"),
@@ -542,7 +627,7 @@ def add_video(built, shots, art, rid):
             continue
         acts = [a for k, a in LIVE if k in s["visual"]][:3] or ["light changes gently, dust floats in the air"]
         items.append({"jpg": jpg, "mp4": f"/tmp/art_{rid}/v{i:02d}.mp4", "seconds": float(b["end"]) - float(b["start"]) + 0.6,
-                      "prompt": f"watercolor animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"})
+                      "prompt": f"{art_style()} animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"})
         where.append(i)
     if not items or os.environ.get("OPEN_VIDEO", "1") != "1":
         return
@@ -591,6 +676,12 @@ def cmd_render(src, video):
     for i, b in enumerate(built):
         b["end"] = built[i + 1]["start"] if i + 1 < len(built) else dur
     add_video(built, clean, art, rid)
+    first = next((art[s["visual"]] for s in clean if art.get(s.get("visual"))), None)
+    if first:
+        try:
+            make_cover(plan, first, rid)
+        except Exception as e:
+            print("cover failed:", str(e)[:200])
     fixed = {int(k): v for k, v in plan.get("subtitles", {}).items() if str(v).strip()}
     for i, seg in enumerate(json.load(open(tpath))["segments"]):
         fixed.setdefault(i, seg["text"].strip())  # fall back to raw whisper text
