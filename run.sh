@@ -35,6 +35,10 @@ produce() { # make ONE reel and put it into the stock
   S=$(python3 - <<'EOF'
 import json
 q = json.load(open("data/queue.json"))
+for i in q:  # only one production runs at a time, so anything left "in_progress" by the engine is an orphan of a crashed run
+    if i.get("engine") and i.get("status") == "in_progress":
+        i["orphans"] = i.get("orphans", 0) + 1
+        i["status"] = "downloaded" if i["orphans"] < 3 else "needs_owner"
 it = next((i for i in q if i.get("status") == "downloaded" and i.get("video_asset")), None)
 if it:
     it["status"] = "in_progress"; it["engine"] = True
