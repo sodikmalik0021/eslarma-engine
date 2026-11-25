@@ -40,6 +40,10 @@ for i in q:  # only one production runs at a time, so anything left "in_progress
         i["orphans"] = i.get("orphans", 0) + 1
         i["status"] = "downloaded" if i["orphans"] < 3 else "needs_owner"
 it = next((i for i in q if i.get("status") == "downloaded" and i.get("video_asset")), None)
+if not it:  # nothing new: give the reels that were set aside one more round (other pictures, newer program)
+    it = next((i for i in q if i.get("status") == "needs_owner" and i.get("video_asset") and not i.get("publish_started") and i.get("rounds", 0) < 2), None)
+    if it:
+        it["rounds"] = it.get("rounds", 0) + 1; it["auto_tries"] = 1; it["orphans"] = 0
 if it:
     it["status"] = "in_progress"; it["engine"] = True
     json.dump(q, open("data/queue.json", "w"), ensure_ascii=False, indent=1); print(it["video_asset"])
@@ -67,7 +71,7 @@ EOF
 }
 
 cycle() { # beat.yml: keep the stock full, wake the publisher
-N=$(python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0))")
+N=$(python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and (c('downloaded')>0 or any(i.get('status')=='needs_owner' and i.get('video_asset') and not i.get('publish_started') and i.get('rounds',0)<2 for i in q))))")
 if [ "$N" = 1 ] && [ -z "$(gh run list -w produce.yml -L 6 --json status -q '.[]|select(.status!="completed").status')" ]; then gh workflow run produce.yml; fi
 
 W=$(python3 - <<'EOF'
@@ -92,7 +96,7 @@ if [ "$W" -ge 0 ]; then sleep "$W"; bash run.sh beat; fi
 }
 
 need() {
-python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0))"
+python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and (c('downloaded')>0 or any(i.get('status')=='needs_owner' and i.get('video_asset') and not i.get('publish_started') and i.get('rounds',0)<2 for i in q))))"
 }
 
 machine() { # packages and models

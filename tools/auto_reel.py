@@ -296,6 +296,13 @@ def safe_visual(v):
     return v if 5 <= len(v.split()) <= 45 and not any(b in v.lower() + " " for b in BANNED) else ""
 
 
+def house_rules():
+    try:
+        return "\n\nHOUSE RULES:\n" + open(os.path.join(ROOT, "growth/knowledge.md"), encoding="utf-8").read().split("# How the program works")[0][:2500]
+    except Exception:
+        return ""
+
+
 def owner_wishes():
     try:
         n = json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("wishes") or []
@@ -420,7 +427,7 @@ def cmd_plan(src):
     free = [p for p in open_art.PALETTES if p not in used_pal]
     plan["palette"] = free[int(hashlib.md5(rid.encode()).hexdigest(), 16) % len(free)]
     plan["planned_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    wish = owner_wishes()
+    wish = owner_wishes() + house_rules()
     r, m = ask(f"{PICK_RULES}{wish}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
     if not r:
         raise SystemExit("planner: no model could pick scenes")  # never guess pictures

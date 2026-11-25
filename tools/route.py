@@ -76,10 +76,7 @@ def ok(src, mp4, publish):
         set_item(src, status="ready", qa_pass=True, ready_at=datetime.now(timezone.utc).isoformat(timespec="seconds"), hook=plan.get("hook"))
         return out("none")  # tools/slots.py (bot tick) releases it at the next slot
     st, tries = give_back(src, "QA failed")
-    if os.path.exists(sheet):
-        tg.photo(sheet, f"Ролик {rid} не прошёл проверку — НЕ опубликован.")
-    nxt = "Переделаю сам." if st == "downloaded" else "Три попытки не прошли — ролик ждёт вас (статус needs_owner)."
-    tg.text(f"⚠️ Ролик {rid} «{plan.get('hook', '')}» не опубликован: проверка качества не пройдена.\n\n{txt}\n\n{nxt}")
+    # no message for every failed try: the reel is remade by itself; the evening report of the bot tells how many were set aside
     out("none")
 
 
@@ -88,8 +85,6 @@ def fail(src, reason):
         set_item(src, status="downloaded", last_error=reason[:300])
         return
     st, tries = give_back(src, reason)
-    nxt = "Вернул в очередь, переделаю сам." if st == "downloaded" else "Три попытки подряд не удались — ролик отложен (needs_owner)."
-    tg.text(f"⚠️ Автопрограмма: ролик {src} не сделан — ошибка на шаге «{reason}». Ничего не опубликовано.\n{nxt}")
 
 
 if __name__ == "__main__":
