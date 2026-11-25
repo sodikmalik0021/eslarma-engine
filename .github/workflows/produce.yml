@@ -1,0 +1,20 @@
+name: produce
+on:
+  schedule: [{ cron: "41 1,5,9,13,17,21 * * *" }]
+  workflow_dispatch:
+permissions: { contents: read, actions: write }
+concurrency: { group: produce }
+jobs:
+  reel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}", LOCAL_MODEL: "gemma3:12b", QA_SEPARATE: "1" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: sodikmalik0021/eslarma-bot, ref: main, path: priv, ssh-key: "${{ secrets.DATA_KEY }}" }
+      - uses: actions/cache@v4
+        with: { path: ~/.ollama/models, key: models-1 }
+      - run: bash run.sh make
+      - if: always()
+        run: bash run.sh next
