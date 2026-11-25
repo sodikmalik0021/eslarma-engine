@@ -74,18 +74,23 @@ class Clip:
 CLIP_MIN = 0.25  # below: the picture does not show its description -> repaint with another seed
 
 
-def generate(items, out, w=768, h=1344):
+def generate(items, out, w=704, h=1216, budget=100 * 60):
     os.makedirs(out, exist_ok=True)
     t = time.time(); p = pipe(); print(f"model ready in {time.time()-t:.0f}s", flush=True)
     import torch
+    t0, per = time.time(), 0
     bad, clip, scores = [], Clip(), {}
     emb = encode(p, [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"])) + it["prompt"] for it in items])
     for (pe, ppe), it in zip(emb, items):
         for k in range(3):
+            left, todo = budget - (time.time() - t0), len(items) - len(scores)
+            if k and left < per * todo:  # no time for repaints: the remaining phrases come first
+                break
             t = time.time()
             im = p(prompt_embeds=pe, pooled_prompt_embeds=ppe, num_inference_steps=4, guidance_scale=0, width=w, height=h,
                    generator=torch.Generator().manual_seed(it.get("seed", 7) + 100 * k)).images[0]
             im = im.crop((int(w * .04), int(h * .03), int(w * .96), int(h * .97)))  # painted white borders
+            per = max(per, time.time() - t)
             face, sc = has_face(im), clip.score(im, it["prompt"])
             print(f"ok {it['name']} {time.time()-t:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
             if not face and sc > scores.get(it["name"], -1):

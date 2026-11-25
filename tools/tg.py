@@ -36,15 +36,32 @@ def _curl(method, fields, files=None):
     return d
 
 
+def outbox(msg, **kw):
+    p = os.path.join(ROOT, "data/outbox.json")
+    try:
+        o = json.load(open(p, encoding="utf-8"))
+    except Exception:
+        o = []
+    o.append(dict({"text": msg[:3900]}, **kw))
+    json.dump(o, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    return {"ok": True}
+
+
 def text(msg):
+    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
+        return outbox(msg)
     return _curl("sendMessage", {"text": msg[:4000], "disable_web_page_preview": "true"})
 
 
 def photo(path, caption=""):
+    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
+        return {"ok": True}  # the text message follows
     return _curl("sendPhoto", {"caption": caption[:1000]}, {"photo": path})
 
 
 def approve(mp4, rid, caption):
+    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
+        return outbox(caption, approve=rid)
     kb = {"inline_keyboard": [[{"text": "✅ Опубликовать", "callback_data": f"pub:{rid}"},
                                {"text": "❌ Отклонить", "callback_data": f"rej:{rid}"}]]}
     d = _curl("sendVideo", {"caption": caption[:1000], "reply_markup": json.dumps(kb), "supports_streaming": "true"}, {"video": mp4})

@@ -15,8 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 340
     env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}   # optional
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       LOCAL_MODEL: gemma3:12b
@@ -50,6 +49,8 @@ jobs:
       - name: Make one reel
         if: steps.need.outputs.go == '1'
         run: bash run.sh produce
-      - name: Wake the clock
+      - name: Next reel
         if: always()
-        run: gh workflow run clock.yml
+        run: |
+          bash run.sh beat
+          gh workflow run beat.yml || true

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Engine entry points. Code is here (public); all content lives in the private repository checked out into ./priv.
-#   run.sh setup | tick | produce
+#   run.sh setup | beat | produce
 # Stage output goes to priv/data/logs (private), the public log shows only step names and results.
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -26,41 +26,8 @@ setup() {
   return 0
 }
 
-tick() { # one beat of the clock: Telegram, downloads, publishing at slots
-  fresh
-  python3 bot.py >> data/logs/bot.log 2>&1 || echo "bot tick failed"
-  if grep -qE '"status": "(new|retry)"' data/queue.json; then
-    pip install --quiet --upgrade yt-dlp && python3 download.py >> data/logs/bot.log 2>&1 || echo "download failed"
-    for f in videos/*.mp4; do [ -e "$f" ] && store_video "$f"; done
-  fi
-  tail -n 400 data/logs/bot.log > /tmp/bl && cp /tmp/bl data/logs/bot.log
-  save "queue update" data
-  for S in $(python3 -c "import json;print(' '.join(i['video_asset'] for i in json.load(open('data/queue.json')) if i.get('status')=='approved'))"); do
-    ID=${S#src_}; ID=${ID%.mp4}
-    pg fetch -q --depth 1 origin refs/heads/media && pg show "FETCH_HEAD:out/eslarma_$ID.mp4" > /tmp/$ID.mp4 || { echo "no video for an approved item"; continue; }
-    if APPROVED=1 python3 tools/publish_item.py "$S" /tmp/$ID.mp4 >> data/logs/publish.log 2>&1; then echo "published one reel"; else
-      echo "publish failed"
-      python3 - "$S" <<'EOF'
-import json, sys
-sys.path.insert(0, "tools"); import tg
-q = json.load(open("data/queue.json"))
-for i in q:
-    if i.get("video_asset") == sys.argv[1] and i.get("status") == "approved":
-        i["publish_tries"] = i.get("publish_tries", 0) + 1
-        if i["publish_tries"] >= 4:
-            i["status"] = "needs_owner"
-            tg.text(f"⚠️ Ролик {sys.argv[1]} не публикуется (4 попытки). Отложил, беру следующий.")
-json.dump(q, open("data/queue.json", "w"), ensure_ascii=False, indent=1)
-EOF
-    fi
-    save "publish" data
-  done
-}
-
-store_video() { # private branch "videos"
-  local f="$1"; rm -rf /tmp/vid; pg worktree prune
-  pg fetch -q --depth 1 origin refs/heads/videos && pg worktree add -q --detach /tmp/vid FETCH_HEAD && cp "$f" /tmp/vid/ &&
-    (cd /tmp/vid && git add -A && git commit -qm "source video" && git push -q origin HEAD:refs/heads/videos) && rm -f "$f" || echo "video not stored"
+beat() { # wake the private publisher (a push by the deploy key starts its workflow)
+  fresh; date -u +%FT%TZ > data/tick; save "tick" data
 }
 
 produce() { # make ONE reel and put it into the stock
@@ -79,7 +46,7 @@ EOF
   save "engine: $S in_progress" data || true
   fail() { echo "stage failed: $1"; tail -c 60000 $LOG > /tmp/l && cp /tmp/l $LOG; pg checkout -q -- data/queue.json 2>/dev/null; fresh; python3 tools/route.py fail "$S" "$1" >> /dev/null 2>&1; save "engine: return $S" data; return 1; }
   pg fetch -q --depth 1 origin refs/heads/videos && pg show "FETCH_HEAD:$S" > /tmp/$S && [ -s /tmp/$S ] || { fail "исходное видео"; return 1; }
-  for st in "plan:план:60m" "render:рендер:150m" "check:проверка звука:15m" "qa:чек-лист качества:40m"; do
+  for st in "plan:план:60m" "render:рендер:200m" "check:проверка звука:15m" "qa:чек-лист качества:40m"; do
     IFS=: read -r a name lim <<< "$st"; echo "== $a $(date +%H:%M)"
     if [ $a = qa ]; then C="python3 tools/qa.py $S /tmp/$S"; else C="python3 tools/auto_reel.py $a $S /tmp/$S"; fi
     timeout $lim $C >> $LOG 2>&1 || { fail "$name"; return 1; }
