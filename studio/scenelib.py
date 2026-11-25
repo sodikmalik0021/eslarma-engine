@@ -233,7 +233,7 @@ def mirror_self(u, seed, label):
 @scene("a question: what, why, how", "nima nega qanday qachon kim")
 def question(u, seed, label): return outdoor(u, bub(760, 800, txt(760, 900, "?", 290, "#3f6b4c"), 220, 190), [still(520, 1.9)], seed, fg="bush")
 
-@scene("money, wealth, worldly life, debt", "pul boylik dunyo savdo biznes qarz")
+@scene("money, wealth, worldly life, debt", "pul boylik savdo biznes qarz")
 def money(u, seed, label): return insert(u, up(coins(380, 1390, 1.0), 380, 1390, 2.1) + up(coins(760, 1390, 1.0), 760, 1390, 2.1))
 
 @scene("shop, work, trade", "do'kon ish kasb tijorat")

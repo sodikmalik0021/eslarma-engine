@@ -111,9 +111,12 @@ for k in 1 2 3; do ollama pull $LOCAL_MODEL > /dev/null 2>&1 && break; sleep 20;
 make() { # produce.yml: whole job
   setup || return 1
   [ "$(need)" = 1 ] || { echo "stock is full"; return 0; }
-  machine; produce
+  machine; produce; rm -f /tmp/took; [ -n "$S" ] && touch /tmp/took; return 0
 }
 
-next() { setup; beat; gh workflow run beat.yml || true; }
+next() { # tell the publisher, then queue the following reel here: the beat would still see this run as active
+  setup; beat
+  if [ -f /tmp/took ] && [ "$(need)" = 1 ]; then gh workflow run produce.yml || true; fi
+}
 
 "$@"

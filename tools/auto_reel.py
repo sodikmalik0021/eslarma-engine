@@ -418,7 +418,7 @@ def paint(plan, shots, rid):
     except Exception:
         pass
     try:
-        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=135 * 60)
+        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=150 * 60)
     except Exception as e:
         print("painting failed:", str(e)[:200])
     art = {v: f"{out}/p{k:02d}.jpg" for k, v in enumerate(vis) if os.path.exists(f"{out}/p{k:02d}.jpg")}

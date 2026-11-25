@@ -74,34 +74,56 @@ class Clip:
 CLIP_MIN = 0.25  # below: the picture does not show its description -> repaint with another seed
 
 
-def generate(items, out, w=704, h=1216, budget=100 * 60):
+def faceless(prompt):
+    """the same scene with small dark silhouettes instead of people: used when the first painting showed a face"""
+    import art_prompts as A
+    t = prompt
+    for a, b in ((A.M, "distant dark silhouette of a man in skullcap"), (A.W, "distant dark silhouette of a woman in long hijab"),
+                 (A.K, "small distant dark silhouette of a boy")):
+        t = t.replace(a, b)
+    return t + ", tiny distant backlit silhouettes, figures facing away, wide view"
+
+
+def generate(items, out, w=704, h=1216, budget=125 * 60):
+    """first pass: every phrase once; then the time left goes to repaints (faces first, then pictures that miss their description)"""
     os.makedirs(out, exist_ok=True)
     t = time.time(); p = pipe(); print(f"model ready in {time.time()-t:.0f}s", flush=True)
     import torch
     t0, per = time.time(), 0
-    bad, clip, scores = [], Clip(), {}
-    emb = encode(p, [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"])) + it["prompt"] for it in items])
-    for (pe, ppe), it in zip(emb, items):
-        for k in range(3):
-            left, todo = budget - (time.time() - t0), len(items) - len(scores)
-            if k and left < per * todo:  # no time for repaints: the remaining phrases come first
-                break
-            t = time.time()
-            im = p(prompt_embeds=pe, pooled_prompt_embeds=ppe, num_inference_steps=4, guidance_scale=0, width=w, height=h,
-                   generator=torch.Generator().manual_seed(it.get("seed", 7) + 100 * k)).images[0]
-            im = im.crop((int(w * .04), int(h * .03), int(w * .96), int(h * .97)))  # painted white borders
-            per = max(per, time.time() - t)
-            face, sc = has_face(im), clip.score(im, it["prompt"])
-            print(f"ok {it['name']} {time.time()-t:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
-            if not face and sc > scores.get(it["name"], -1):
-                im.save(os.path.join(out, it["name"] + ".jpg"), quality=94)
-                scores[it["name"]] = round(sc, 3)
-            if not face and sc >= CLIP_MIN:
-                break
-        if it["name"] not in scores:
-            bad.append(it["name"])
+    clip, scores, tries, faces = Clip(), {}, {}, set()
+    st = [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"])) for it in items]
+    n = len(items)
+    emb = encode(p, [s + it["prompt"] for s, it in zip(st, items)] + [s + faceless(it["prompt"]) for s, it in zip(st, items)])
+
+    def paint(i):
+        nonlocal per
+        it, k = items[i], tries.get(i, 0)
+        tries[i] = k + 1
+        t = time.time()
+        pe, ppe = emb[i + n] if i in faces else emb[i]
+        im = p(prompt_embeds=pe, pooled_prompt_embeds=ppe, num_inference_steps=4, guidance_scale=0, width=w, height=h,
+               generator=torch.Generator().manual_seed(it.get("seed", 7) + 100 * k)).images[0]
+        im = im.crop((int(w * .04), int(h * .03), int(w * .96), int(h * .97)))  # painted white borders
+        per = time.time() - t
+        face, sc = has_face(im), clip.score(im, it["prompt"])
+        print(f"ok {it['name']} try {k + 1} {per:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
+        if face:
+            faces.add(i)
+        elif sc > scores.get(it["name"], -1):
+            im.save(os.path.join(out, it["name"] + ".jpg"), quality=94)
+            scores[it["name"]] = round(sc, 3)
+
+    for i in range(n):
+        paint(i)
+    while time.time() - t0 + per * 1.1 < budget:
+        missing = [i for i in range(n) if items[i]["name"] not in scores and tries[i] < 5]
+        weak = [i for i in range(n) if scores.get(items[i]["name"], 1) < CLIP_MIN and tries[i] < 3]
+        todo = sorted(missing, key=lambda i: tries[i]) or weak
+        if not todo:
+            break
+        paint(todo[0])
     json.dump(scores, open(os.path.join(out, "_clip.json"), "w"))
-    json.dump(bad, open(os.path.join(out, "_faces.json"), "w"))
+    json.dump([it["name"] for it in items if it["name"] not in scores], open(os.path.join(out, "_faces.json"), "w"))
 
 
 if __name__ == "__main__":

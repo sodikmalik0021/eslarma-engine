@@ -11,7 +11,7 @@ ART = {
     "not_listening": [f"{K} running away after a red ball across a courtyard, {M} left standing behind", f"{K} sitting alone turned away in the corner of a courtyard, a red ball beside him"],
     "family_meal": ["low round table with round flatbread, teapot, tea bowls, grapes and plov on a red carpet", "big dish of plov, pomegranates and flatbread on an embroidered tablecloth",
                     f"family seen from behind sitting around a low table with teapot and bread in a courtyard"],
-    "family_home": ["traditional Uzbek clay house with carved blue wooden door and grape vine courtyard", f"{M}, {W} and {K} standing before a clay house with a blue door",
+    "family_home": [f"{M}, {W} and {K} standing before a clay house with a blue door", "traditional Uzbek clay house with one carved blue wooden door and grape vine courtyard",
                     "warm lit windows of a small clay house at dusk, smoke from the chimney"],
     "wedding": [f"groom in white skullcap and bride in white dress with long veil, both seen from behind, under an arch of roses", "two golden wedding rings on white silk among rose petals",
                 "courtyard decorated with garlands of roses and lanterns for a wedding"],
