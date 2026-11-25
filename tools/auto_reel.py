@@ -235,6 +235,8 @@ Arabic quotes: correct Latin transliteration. Return ONLY JSON {"subtitles": {"0
 
 PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase choose the ONE scene whose picture shows what the speaker
 MEANS at that moment, in the context of the whole speech (not just a similar word). A concrete thing that is named gets its literal scene.
+Religious meanings: "dunyo" (as opposed to oxirat, qalb, ibodat) = worldly wealth -> money; "bu dunyoda" = in this life -> calendar_day or two_paths; never a globe.
+"yo'l" = way of life; "nur" = guidance; "qalb / dil" = inner heart; "ne'mat" = blessing; "balo" = trial or misfortune; "nafs" = desires; "rizq" = provision.
 If no scene fits, use "none". Neighbouring phrases of the same idea may share a scene, but do not use one scene more than 3 times.
 Scenes with a child or family only when the speech is about children or family. "label": "".
 Return ONLY JSON {"scenes": [{"i": 0, "scene": "name", "label": ""}, ...]} for ALL phrases."""
