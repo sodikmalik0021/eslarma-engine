@@ -138,13 +138,49 @@ def draw_overlay(frame, t, dur, hook, cta):
     img = Image.alpha_composite(img, lay).convert("RGB")
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
+class Clip:
+    """an animated painting stretched to the length of its shot; in-between frames come from optical flow"""
+    def __init__(self, path):
+        c, self.f = cv2.VideoCapture(path), []
+        while True:
+            ok, fr = c.read()
+            if not ok: break
+            self.f.append(fr)
+        if len(self.f) < 8: raise RuntimeError("empty clip " + path)
+        self.key, self.pair = None, None
+        h, w = self.f[0].shape[:2]
+        self.grid = np.stack(np.meshgrid(np.arange(w), np.arange(h)), -1).astype(np.float32)
+        self.dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_FAST)
+
+    def at(self, lt):
+        x = min(max(lt, 0), 1) * (len(self.f) - 1)
+        i = min(int(x), len(self.f) - 2); a = x - i
+        fr = self.f[i]
+        if fr.shape[0] < 1500 and a > 0.02:
+            if self.key != i:
+                g = [cv2.cvtColor(self.f[j], cv2.COLOR_BGR2GRAY) for j in (i, i + 1)]
+                self.key, self.pair = i, (self.dis.calc(g[0], g[1], None), self.dis.calc(g[1], g[0], None))
+            p = cv2.remap(self.f[i], self.grid - self.pair[0] * a, None, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32)
+            q = cv2.remap(self.f[i + 1], self.grid - self.pair[1] * (1 - a), None, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32)
+            fr = p * (1 - a) + q * a
+        if fr.shape[:2] != (H, W):
+            k = max(W / fr.shape[1], H / fr.shape[0])
+            fr = cv2.resize(fr.astype(np.float32), None, fx=k, fy=k, interpolation=cv2.INTER_CUBIC)
+            y, x0 = (fr.shape[0] - H) // 2, (fr.shape[1] - W) // 2
+            fr = fr[y:y + H, x0:x0 + W]
+            fr = cv2.addWeighted(fr, 1.5, cv2.GaussianBlur(fr, (0, 0), 2.0), -0.5, 0)
+        return np.clip(fr.astype(np.float32), 0, 255)
+
+
 def main(plan_path):
     plan = json.load(open(plan_path))
     dur = plan["duration"]
     scenes = plan["scenes"]
     imgs = []
     for s in scenes:
-        if s.get("layers"):
+        if s.get("video"):
+            imgs.append(Clip(s["video"]))
+        elif s.get("layers"):
             ls = []
             for l in s["layers"]:
                 im = cv2.imread(l["png"], cv2.IMREAD_UNCHANGED)
@@ -166,6 +202,11 @@ def main(plan_path):
     XF = 0.6
     def shot(i, t):
         s = scenes[i]; lt = (t - s["start"]) / max(s["end"] - s["start"], 0.1)
+        if s.get("video"):
+            fr = imgs[i].at((t - s["start"]) / max(s["end"] + (XF if i + 1 < len(scenes) else 0) - s["start"], 0.1))
+            for p in s.get("_screen_particles", []):
+                p.draw(fr, t)
+            return fr
         if s.get("layers"):
             lay = []
             for img, depth, spec in imgs[i]:

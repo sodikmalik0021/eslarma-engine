@@ -481,7 +481,7 @@ def paint(plan, shots, rid):
     except Exception:
         pass
     try:
-        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=150 * 60)
+        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=120 * 60)
     except Exception as e:
         print("painting failed:", str(e)[:200])
     art = {v: f"{out}/p{k:02d}.jpg" for k, v in enumerate(vis) if os.path.exists(f"{out}/p{k:02d}.jpg")}
@@ -525,6 +525,38 @@ def art_shot(jpg, name, i, s):
             "cam": {"zoom": list(zoom), "focus": list(focus)}}
 
 
+LIVE = (("stream", "water flows and sparkles"), ("water", "water moves and glitters"), ("tree", "leaves sway in the wind"), ("orchard", "branches sway, petals fall"),
+        ("lantern", "the flame flickers"), ("lamp", "the flame flickers"), ("bird", "birds move and flap"), ("field", "grass waves in the wind"),
+        ("walking", "the man walks forward step by step"), ("rain", "rain falls"), ("snow", "snow falls"), ("car", "the car drives forward"),
+        ("sheep", "the sheep graze and move"), ("horse", "the horse moves its head and tail"), ("sand", "sand runs down"), ("crowd", "people walk"),
+        ("street", "people walk"), ("raised arms", "the man slowly raises his arms"), ("sky", "clouds drift"), ("teapot", "steam rises from the tea"),
+        ("plov", "steam rises from the food"), ("candle", "the flame flickers"), ("sea", "waves roll"), ("coins", "coins glitter"), ("rose", "petals tremble"))
+
+
+def add_video(built, shots, art, rid):
+    """every painting becomes a moving clip; what is not animated keeps the still painting with a moving camera"""
+    items, where = [], []
+    for i, (b, s) in enumerate(zip(built, shots)):
+        jpg = art.get(s.get("visual"))
+        if not jpg:
+            continue
+        acts = [a for k, a in LIVE if k in s["visual"]][:3] or ["light changes gently, dust floats in the air"]
+        items.append({"jpg": jpg, "mp4": f"/tmp/art_{rid}/v{i:02d}.mp4", "seconds": float(b["end"]) - float(b["start"]) + 0.6,
+                      "prompt": f"watercolor animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"})
+        where.append(i)
+    if not items or os.environ.get("OPEN_VIDEO", "1") != "1":
+        return
+    pj = f"/tmp/art_{rid}_v.json"
+    json.dump(items, open(pj, "w"))
+    try:
+        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_video.py"), pj, str(150 * 60)], timeout=185 * 60, check=True)
+    except Exception as e:
+        print("animation failed:", str(e)[:200])
+    for it, i in zip(items, where):
+        if os.path.exists(it["mp4"]) and os.path.getsize(it["mp4"]) > 5000:
+            built[i]["video"] = it["mp4"]
+
+
 def cmd_render(src, video):
     os.chdir(os.path.join(ROOT, "studio"))  # layer PNGs are written relative to studio/
     import compose
@@ -558,6 +590,7 @@ def cmd_render(src, video):
         built.append(d)
     for i, b in enumerate(built):
         b["end"] = built[i + 1]["start"] if i + 1 < len(built) else dur
+    add_video(built, clean, art, rid)
     fixed = {int(k): v for k, v in plan.get("subtitles", {}).items() if str(v).strip()}
     for i, seg in enumerate(json.load(open(tpath))["segments"]):
         fixed.setdefault(i, seg["text"].strip())  # fall back to raw whisper text

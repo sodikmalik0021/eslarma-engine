@@ -50,7 +50,7 @@ EOF
   save "engine: $S in_progress" data || true
   fail() { echo "stage failed: $1"; tail -c 60000 $LOG > /tmp/l && cp /tmp/l $LOG; pg checkout -q -- data/queue.json 2>/dev/null; fresh; python3 tools/route.py fail "$S" "$1" >> /dev/null 2>&1; save "engine: return $S" data; return 1; }
   pg fetch -q --depth 1 origin refs/heads/videos && pg show "FETCH_HEAD:$S" > /tmp/$S && [ -s /tmp/$S ] || { fail "исходное видео"; return 1; }
-  for st in "plan:план:60m" "render:рендер:200m" "check:проверка звука:15m" "qa:чек-лист качества:40m"; do
+  for st in "plan:план:60m" "render:рендер:285m" "check:проверка звука:15m" "qa:чек-лист качества:40m"; do
     IFS=: read -r a name lim <<< "$st"; echo "== $a $(date +%H:%M)"
     if [ $a = qa ]; then C="python3 tools/qa.py $S /tmp/$S"; else C="python3 tools/auto_reel.py $a $S /tmp/$S"; fi
     timeout $lim $C >> $LOG 2>&1 || { fail "$name"; return 1; }

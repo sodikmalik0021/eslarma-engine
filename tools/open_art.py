@@ -84,7 +84,7 @@ def faceless(prompt):
     return "backlit silhouettes, " + t if t != prompt else t
 
 
-def generate(items, out, w=704, h=1216, budget=125 * 60):
+def generate(items, out, w=704, h=1216, budget=95 * 60):
     """first pass: every phrase once; then the time left goes to repaints (faces first, then pictures that miss their description)"""
     os.makedirs(out, exist_ok=True)
     t = time.time(); p = pipe(); print(f"model ready in {time.time()-t:.0f}s", flush=True)
