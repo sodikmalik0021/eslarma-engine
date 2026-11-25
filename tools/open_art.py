@@ -133,7 +133,7 @@ def generate(items, out, w=704, h=1216, budget=125 * 60):
         paint(i)
     while time.time() - t0 + per * 1.1 < budget:
         missing = [i for i in range(n) if items[i]["name"] not in scores and tries[i] < 5]
-        weak = [i for i in range(n) if scores.get(items[i]["name"], 1) < CLIP_MIN and tries[i] < 4]
+        weak = [i for i in range(n) if scores.get(items[i]["name"], 1) < CLIP_MIN and tries[i] < 7]
         todo = sorted(missing, key=lambda i: tries[i]) or weak
         if not todo:
             break

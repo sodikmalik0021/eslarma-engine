@@ -296,6 +296,22 @@ def build(name, uid, seed=1, label=""):
     return SCENES[name][0](uid, seed, str(label or "").upper()[:12])
 
 
+# scenes that exist only as paintings (the drawn version is a plain stand-in and QA never lets it out)
+for _n, _like, _m, _w in (
+    ("cup_full", "heart_scene", "cup / bowl filling drop by drop, patience or measure running out", "paymona piyola kosa tomchi to'ldi"),
+    ("speed_road", "car_street", "dangerous fast driving, accident on the road", "tezlik skorost avariya poyga"),
+    ("hurt_heart", "quarrel", "hurting someone's heart, offence, curse, broken feelings", "dili diliga dilini ozor qarg'ish ranjit xafa"),
+    ("pit_fall", "sin_thorns", "falling, pit, cliff, ruin, disaster", "chuqur yiqil halokat falokat"),
+    ("overeating", "family_meal", "eating too much, gluttony, getting fat", "semir ovqat yeydi"),
+    ("livestock", "honest_work", "sheep, cattle, horses, animals", "qo'yim sigir echki hayvon"),
+    ("farm_field", "honest_work", "field work of our grandfathers, hoe, digging", "ketmon dala gektar chopgan chopar paxta"),
+    ("listen_advice", "teach_child", "listening to advice, a talk, a warning to the young", "eshiting eshitib quloq yoshlar"),
+    ("walking", "to_mosque", "walking on foot, movement", "piyoda harakat"),
+    ("thanks_nemat", "mercy_light", "blessings, gratitude (shukr, ne'mat)", "shukr shukur ne'mat"),
+):
+    SCENES[_n] = (SCENES[_like][0], _m, tuple(_w.split()))
+
+
 def catalog():
     return "\n".join(f"- {k}: {v[1]}" for k, v in SCENES.items())
 

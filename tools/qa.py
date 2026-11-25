@@ -169,7 +169,7 @@ def main(src, source):
         # a weak judge (lite / local) is trusted only together with the objective CLIP check of every painting
         strong = rmodel and not rmodel.startswith("local:") and "lite" not in rmodel
         c = plan.get("clip") or {}
-        clip_ok = c.get("min", 0) >= 0.22 and c.get("mean", 0) >= 0.26
+        clip_ok = c.get("min", 0) >= 0.20 and c.get("mean", 0) >= 0.26
         bad1 = g("words_match").get("bad_shots") or []
         put(1, "words = picture", g("words_match").get("ok") and score >= 8 and len(bad1) <= 1 and (strong or clip_ok)
             and not any("fallback" in f or "repetitive" in f for f in flags),

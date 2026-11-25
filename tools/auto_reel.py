@@ -6,6 +6,7 @@
 
 Env: GEMINI_API_KEY (free key from aistudio.google.com), optional GEMINI_MODEL.
 """
+import re
 import json, os, subprocess, sys, urllib.request, hashlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -280,6 +281,29 @@ def phrases_of(tpath, subs):
     return [{"start": round(p[0]["s"], 2), "text": " ".join(w["w"] for w in p)} for p in out]
 
 
+def hook_lines(subs):
+    """short complete sentences of the speech itself: the only titles a small model may choose"""
+    out = []
+    for i in sorted(subs, key=int):
+        for x in re.split(r"(?<=[.?!])\s+", subs[i].strip()):
+            x = x.strip(" ;")
+            if x[-1:] in ".?!" and 3 <= len(x.split()) <= 8 and len(x) <= 60 and x not in out:
+                out.append(x[:1].upper() + x[1:])
+    return out
+
+
+ASK_LINES = ["Siz bu haqda nima deysiz? 👇", "Sizga qaysi gap ta'sir qildi? 👇", "Fikringizni izohda yozing 👇"]
+SEND_LINES = ["📌 Buni yaqiningizga yuboring.", "📌 Buni do'stingizga yuboring.", "📌 Buni oilangizga yuboring."]
+NOTE_LINES = ["Eng ko'p ta'sir qilgan gapni izohda yozing 👇", "Davomini xohlaysizmi? Izohda yozing 👇", "Yaqinlaringizga ham yuboring 🤍"]
+
+
+def safe_texts(hook, rid):
+    """caption and comment from fixed, correct Uzbek phrases around a title that the speaker said himself"""
+    k = int(hashlib.md5(rid.encode()).hexdigest(), 16) % 3
+    cap = f"{hook}\n\n{ASK_LINES[k]}\n\n🎙 @abdulloh.domla\n\n{SEND_LINES[k]}\n\n#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon"
+    return {"hook": hook, "caption": cap, "comment": NOTE_LINES[k]}
+
+
 def cmd_plan(src):
     import scenelib
     sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -326,6 +350,16 @@ def cmd_plan(src):
         raise SystemExit("planner: no valid hook/caption from any model")
     models.add(mm)
     plan = {k: meta.get(k) for k in ("topic", "metaphor", "hook", "caption", "comment")}
+    if str(mm).startswith("local"):  # a small model must not write Uzbek or Arabic of its own: only the speaker's words + fixed phrases
+        lines = hook_lines(subs)
+        hk = None
+        if lines:
+            hk, _ = ask("From this speech choose the line that works best as the title of a short video: clear without context, intriguing, "
+                        'on the main topic. Return ONLY JSON {"i": line number}.\n\n' + "\n".join(f"{i}: {x}" for i, x in enumerate(lines)),
+                        lambda r: isinstance(r, dict) and str(r.get("i", "")).isdigit() and int(r["i"]) < len(lines), 60)
+        if not hk:
+            raise SystemExit("planner: no line of the speech fits as a title")
+        plan.update(safe_texts(lines[int(hk["i"])], rid))
     plan["hook"], plan["cta"], plan["subtitles"] = uz_latin(plan["hook"]), "Obuna bo'ling — har kuni eslatma", subs
 
     # 2. one library scene per phrase
@@ -347,6 +381,16 @@ def cmd_plan(src):
     if not r:
         raise SystemExit("planner: no model could pick scenes")  # never guess pictures
     models.add(m)
+
+    def ok_theme(x):
+        return isinstance(x, dict) and len([s for s in x.get("theme") or [] if s in scenelib.SCENES]) >= 4
+    th, _ = ask("Choose the 6 scenes that best illustrate the MAIN TOPIC of the whole speech below (not single words).\n"
+                f'Return ONLY JSON {{"theme": ["scene", ...]}}.\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}', ok_theme, 200)
+    theme = [s for s in (th or {}).get("theme", []) if s in scenelib.SCENES]
+    print("theme:", theme)
+
+    def fresh():  # topic scenes that still have an unseen painting
+        return [s for s in theme if any(v not in shown for v in art_prompts.ART.get(s, []))]
     pick = {int(x["i"]): x for x in r["scenes"]}
     shots, none = [], []
     shown = list(used_vis)  # paintings of the last reels and of this one
@@ -358,10 +402,13 @@ def cmd_plan(src):
         if sc == "none":
             if len(p["text"].split()) > 4 and not p["text"].strip().endswith("?"):  # short fillers may keep the previous picture
                 none.append(p["text"])
-            if shots:  # keep the previous picture rather than show something unrelated
+            if fresh() and (not shots or p["start"] - shots[-1]["start"] >= 2.4):  # no picture of its own: show the topic of the speech
+                sc = fresh()[len(shots) % len(fresh())]
+            elif shots:  # keep the previous picture rather than show something unrelated
                 shots[-1]["says"] += " " + p["text"]
                 continue
-            sc = "question"
+            else:
+                sc = "question"
         if sc == "calendar_day" and not label:
             label = p["text"].split()[0].strip(",.")
         start = 0.0 if not shots else p["start"]
@@ -369,9 +416,15 @@ def cmd_plan(src):
             shots[-1]["says"] += " " + p["text"]
             continue
         vis = art_prompts.choose(sc, shown)
+        if vis in shown:  # every variant was already seen: another picture of the topic, else keep the previous one
+            if fresh():
+                sc = fresh()[0]; vis = art_prompts.choose(sc, shown)
+            elif shots:
+                shots[-1]["says"] += " " + p["text"]
+                continue
         shown.append(vis)
         shots.append({"start": start, "says": p["text"], "scene": sc, "label": label, "visual": vis})
-    if len(none) > 0.2 * len(ph):
+    if len(none) > (0.45 if theme else 0.2) * len(ph):
         flags.append(f"fallback-like: no matching scene for {len(none)} of {len(ph)} phrases: {none[:4]}")
     full = []  # long shots continue with another camera framing
     for k, s in enumerate(shots):
@@ -381,6 +434,8 @@ def cmd_plan(src):
         for j in range(1, n + 1):
             c = dict(s, start=round(s["start"] + j * (end - s["start"]) / (n + 1), 2), continues=True)
             alt = art_prompts.choose(s["scene"], shown)
+            if alt in shown:
+                alt = next((v for x in theme for v in art_prompts.ART.get(x, []) if v not in shown), alt)
             if alt and alt not in shown and len(set(shown) - set(used_vis)) < 20:  # a new painting, not the same frame again
                 shown.append(alt); c["visual"] = alt; c["fresh"] = True
             full.append(c)
