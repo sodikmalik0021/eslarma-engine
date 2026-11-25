@@ -494,6 +494,12 @@ def cmd_plan(src):
     if len(weak) > 0.15 * len(shots):
         flags.append(f"fallback-like: {len(weak)} shots have no usable painting description")
     plan["shots"] = full
+    cv, _ = ask("One painting will be the COVER of this reel. Choose the ONE scene that shows the meaning of the whole speech together with its title at first glance.\n"
+                f'Return ONLY JSON {{"cover": "scene"}}.{house_rules()}\n\nSCENES\n{scenelib.catalog()}\n\nTITLE: {plan["hook"]}\nWHOLE SPEECH: {speech}',
+                lambda x: isinstance(x, dict) and x.get("cover") in scenelib.SCENES, 60)
+    cs = (cv or {}).get("cover") or (theme[0] if theme else None)
+    opts = art_prompts.ART.get(cs) or []
+    plan["cover_visual"] = next((v for v in opts if v not in used_vis), opts[0] if opts else None)
     uses = {}  # the same scene again = another variant/seed and another framing, never the identical frame
     for s in full:
         k = uses[s["scene"]] = uses.get(s["scene"], 0) + (0 if s.get("continues") else 1)
@@ -517,7 +523,7 @@ def paint(plan, shots, rid):
     """paint every distinct visual with the open model (own process, so its memory is freed); {visual: jpg path}"""
     if os.environ.get("OPEN_ART", "1") != "1":
         return {}
-    vis = list(dict.fromkeys(s["visual"] for s in shots if s.get("visual")))
+    vis = list(dict.fromkeys([s["visual"] for s in shots if s.get("visual")] + ([plan["cover_visual"]] if plan.get("cover_visual") else [])))
     if not vis:
         return {}
     import art_prompts
@@ -683,7 +689,7 @@ def cmd_render(src, video):
     for i, b in enumerate(built):
         b["end"] = built[i + 1]["start"] if i + 1 < len(built) else dur
     add_video(built, clean, art, rid)
-    first = next((art[s["visual"]] for s in clean if art.get(s.get("visual"))), None)
+    first = art.get(plan.get("cover_visual")) or next((art[s["visual"]] for s in clean if art.get(s.get("visual"))), None)
     if first:
         try:
             make_cover(plan, first, rid)
