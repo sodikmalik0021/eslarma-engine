@@ -1,48 +1,16 @@
 name: beat
-# No secrets except the data key: wakes the private publisher around the slots and keeps production going.
 on:
-  schedule:
-    - cron: "3,13,23,33,43,53 * * * *"
+  schedule: [{ cron: "3,13,23,33,43,53 * * * *" }]
   workflow_dispatch:
-permissions:
-  contents: read
-  actions: write
-concurrency:
-  group: beat
-  cancel-in-progress: false
+permissions: { contents: read, actions: write }
+concurrency: { group: beat }
 jobs:
   beat:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with: { repository: sodikmalik0021/eslarma-bot, ref: main, path: priv, ssh-key: "${{ secrets.DATA_KEY }}" }
-      - run: bash run.sh setup
-      - name: Keep the stock full
-        run: |
-          N=$(python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0))")
-          if [ "$N" = 1 ] && [ -z "$(gh run list -w produce.yml -L 6 --json status -q '.[]|select(.status!="completed").status')" ]; then gh workflow run produce.yml; fi
-      - name: Wake the publisher at the slot
-        run: |
-          W=$(python3 - <<'EOF'
-          import json, sys
-          sys.path.insert(0, "tools"); import slots
-          from datetime import datetime
-          st, q = json.load(open("data/state.json")), json.load(open("data/queue.json"))
-          now, w = datetime.now(slots.TZ), -1
-          for x in st.get("slots") or slots.DEFAULT:
-              h, m = map(int, x.split(":")); d = (now.replace(hour=h, minute=m, second=20, microsecond=0) - now).total_seconds()
-              if 0 < d <= 100 * 60: w = int(d)
-          if w < 0 and slots.due_slot(q, st) and any(i.get("status") == "ready" for i in q): w = 0   # a missed slot
-          if w < 0:  # otherwise look at Telegram about once an hour
-              try: last = datetime.fromisoformat(open("data/tick").read().strip().replace("Z", "+00:00"))
-              except Exception: last = None
-              if not last or (now - last).total_seconds() > 3300: w = 0
-          print(w)
-          EOF
-          )
-          if [ "$W" -ge 0 ]; then sleep "$W"; bash run.sh beat; fi
+      - run: bash run.sh setup && bash run.sh cycle

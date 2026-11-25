@@ -66,4 +66,54 @@ EOF
   echo "finished; ready: $(count ready)"
 }
 
+cycle() { # beat.yml: keep the stock full, wake the publisher
+N=$(python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0))")
+if [ "$N" = 1 ] && [ -z "$(gh run list -w produce.yml -L 6 --json status -q '.[]|select(.status!="completed").status')" ]; then gh workflow run produce.yml; fi
+
+W=$(python3 - <<'EOF'
+import json, sys
+sys.path.insert(0, "tools"); import slots
+from datetime import datetime
+st, q = json.load(open("data/state.json")), json.load(open("data/queue.json"))
+now, w = datetime.now(slots.TZ), -1
+for x in st.get("slots") or slots.DEFAULT:
+    h, m = map(int, x.split(":")); d = (now.replace(hour=h, minute=m, second=20, microsecond=0) - now).total_seconds()
+    if 0 < d <= 100 * 60: w = int(d)
+if w < 0 and slots.due_slot(q, st) and any(i.get("status") == "ready" for i in q): w = 0   # a missed slot
+if w < 0:  # otherwise look at Telegram about once an hour
+    try: last = datetime.fromisoformat(open("data/tick").read().strip().replace("Z", "+00:00"))
+    except Exception: last = None
+    if not last or (now - last).total_seconds() > 3300: w = 0
+print(w)
+EOF
+)
+if [ "$W" -ge 0 ]; then sleep "$W"; bash run.sh beat; fi
+
+}
+
+need() {
+python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0))"
+}
+
+machine() { # packages and models
+sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg librsvg2-bin fonts-inter > /dev/null
+pip install --quiet "opencv-python-headless<5" numpy pillow faster-whisper
+
+curl -fsSL https://ollama.com/install.sh | sh > /dev/null 2>&1
+sudo systemctl stop ollama 2>/dev/null || true
+nohup env OLLAMA_MODELS=$HOME/.ollama/models ollama serve > /tmp/ollama.log 2>&1 &
+for i in $(seq 1 30); do curl -s 127.0.0.1:11434 > /dev/null && break; sleep 2; done
+for k in 1 2 3; do ollama pull $LOCAL_MODEL > /dev/null 2>&1 && break; sleep 20; done
+
+}
+
+make() { # produce.yml: whole job
+  setup || return 1
+  [ "$(need)" = 1 ] || { echo "stock is full"; return 0; }
+  machine; produce
+}
+
+next() { setup; beat; gh workflow run beat.yml || true; }
+
 "$@"

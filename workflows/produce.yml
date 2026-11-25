@@ -1,56 +1,20 @@
 name: produce
-# One finished reel per run: speech recognition -> plan -> paintings -> animation -> quality gate -> stock.
 on:
-  schedule:
-    - cron: "41 1,5,9,13,17,21 * * *"   # watchdog; normally started by clock
+  schedule: [{ cron: "41 1,5,9,13,17,21 * * *" }]
   workflow_dispatch:
-permissions:
-  contents: read
-  actions: write
-concurrency:
-  group: produce
-  cancel-in-progress: false
+permissions: { contents: read, actions: write }
+concurrency: { group: produce }
 jobs:
   reel:
     runs-on: ubuntu-latest
     timeout-minutes: 340
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}   # optional
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      LOCAL_MODEL: gemma3:12b
-      QA_SEPARATE: "1"
-      OLLAMA_KEEP_ALIVE: 10m
+    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}", LOCAL_MODEL: "gemma3:12b", QA_SEPARATE: "1" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with: { repository: sodikmalik0021/eslarma-bot, ref: main, path: priv, ssh-key: "${{ secrets.DATA_KEY }}" }
-      - run: bash run.sh setup
-      - id: need
-        run: python3 -c "import json;q=json.load(open('data/queue.json'));c=lambda s:sum(i.get('status')==s for i in q);print('go='+str(int(c('ready')+c('approved')+c('awaiting_approval')<6 and c('downloaded')>0)))" >> "$GITHUB_OUTPUT"
-      - name: Disk and packages
-        if: steps.need.outputs.go == '1'
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg librsvg2-bin fonts-inter > /dev/null
-          pip install --quiet "opencv-python-headless<5" numpy pillow faster-whisper
       - uses: actions/cache@v4
-        if: steps.need.outputs.go == '1'
-        with: { path: ~/.ollama/models, key: models-gemma3-12b-uzstt-1 }
-      - name: Local AI model
-        if: steps.need.outputs.go == '1'
-        timeout-minutes: 30
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh > /dev/null 2>&1
-          sudo systemctl stop ollama 2>/dev/null || true
-          nohup env OLLAMA_MODELS=$HOME/.ollama/models ollama serve > /tmp/ollama.log 2>&1 &
-          for i in $(seq 1 30); do curl -s 127.0.0.1:11434 > /dev/null && break; sleep 2; done
-          for k in 1 2 3; do ollama pull $LOCAL_MODEL > /dev/null 2>&1 && break; sleep 20; done
-      - name: Make one reel
-        if: steps.need.outputs.go == '1'
-        run: bash run.sh produce
-      - name: Next reel
-        if: always()
-        run: |
-          bash run.sh beat
-          gh workflow run beat.yml || true
+        with: { path: ~/.ollama/models, key: models-1 }
+      - run: bash run.sh make
+      - if: always()
+        run: bash run.sh next
