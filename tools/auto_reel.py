@@ -296,9 +296,16 @@ def safe_visual(v):
     return v if 5 <= len(v.split()) <= 45 and not any(b in v.lower() + " " for b in BANNED) else ""
 
 
+def lessons():
+    try:
+        return "\n" + open(os.path.join(ROOT, "growth/lessons.md"), encoding="utf-8").read()[:2000]
+    except Exception:
+        return ""
+
+
 def house_rules():
     try:
-        return "\n\nHOUSE RULES:\n" + open(os.path.join(ROOT, "growth/knowledge.md"), encoding="utf-8").read().split("# How the program works")[0][:2500]
+        return "\n\nHOUSE RULES:\n" + open(os.path.join(ROOT, "growth/knowledge.md"), encoding="utf-8").read().split("# How the program works")[0][:2500] + lessons()
     except Exception:
         return ""
 
