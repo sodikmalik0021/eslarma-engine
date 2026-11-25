@@ -1,0 +1,9 @@
+priv/
+data
+growth
+out/
+videos/
+studio/l25/
+studio/plan_auto_*.json
+__pycache__/
+work/
