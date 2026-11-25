@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import tg
 
 Q = os.path.join(ROOT, "data/queue.json")
-MAX_TRIES = 2
+MAX_TRIES = 3
 
 
 def mode():
@@ -78,7 +78,7 @@ def ok(src, mp4, publish):
     st, tries = give_back(src, "QA failed")
     if os.path.exists(sheet):
         tg.photo(sheet, f"Ролик {rid} не прошёл проверку — НЕ опубликован.")
-    nxt = "Попробую ещё раз в следующий слот." if st == "downloaded" else "Две попытки не прошли — ролик ждёт вас (статус needs_owner)."
+    nxt = "Переделаю сам." if st == "downloaded" else "Три попытки не прошли — ролик ждёт вас (статус needs_owner)."
     tg.text(f"⚠️ Ролик {rid} «{plan.get('hook', '')}» не опубликован: проверка качества не пройдена.\n\n{txt}\n\n{nxt}")
     out("none")
 
@@ -88,7 +88,7 @@ def fail(src, reason):
         set_item(src, status="downloaded", last_error=reason[:300])
         return
     st, tries = give_back(src, reason)
-    nxt = "Вернул в очередь, попробую в следующий слот." if st == "downloaded" else "Две попытки подряд не удались — ролик отложен (needs_owner)."
+    nxt = "Вернул в очередь, переделаю сам." if st == "downloaded" else "Три попытки подряд не удались — ролик отложен (needs_owner)."
     tg.text(f"⚠️ Автопрограмма: ролик {src} не сделан — ошибка на шаге «{reason}». Ничего не опубликовано.\n{nxt}")
 
 

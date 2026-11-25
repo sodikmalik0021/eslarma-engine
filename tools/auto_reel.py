@@ -471,7 +471,7 @@ def paint(plan, shots, rid):
         return {}
     import art_prompts
     out, pj = f"/tmp/art_{rid}", f"/tmp/art_{rid}.json"
-    seed = int(hashlib.md5(rid.encode()).hexdigest()[:6], 16)
+    seed = int(hashlib.md5((rid + str(plan.get("planned_at"))).encode()).hexdigest()[:6], 16)
     json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
     try:  # free the local planner model's memory first
         urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=json.dumps(
