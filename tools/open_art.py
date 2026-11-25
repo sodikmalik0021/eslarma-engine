@@ -6,9 +6,9 @@ import json, os, subprocess, sys, time
 # CLIP reads only 77 tokens: the style comes first and stays short, the visual must be <= 35 words
 # no "storybook" / "paper" / "book" words here: the model then paints pages with gibberish
 STYLE = "{palette}, fine watercolor and ink painting, full bleed scene of: "
-PALETTES = {"golden": "golden afternoon light, ochre and olive", "rose": "dusty rose sunset, mauve and peach", "mint": "fresh morning, sage green and cream",
-            "night": "indigo night, warm lantern light", "desert": "sand, terracotta and turquoise", "rain": "cool rainy blue-grey, amber window light",
-            "spring": "spring blossom, soft green and white", "winter": "snowy pale blue, warm windows"}
+PALETTES = {"golden": "golden afternoon light, ochre and olive", "rose": "dusty rose sunset light, mauve and peach", "mint": "fresh morning light, sage green and cream",
+            "night": "moonlit evening, indigo and warm lantern light", "desert": "warm sand, terracotta and turquoise", "rain": "soft overcast light, blue-grey and amber",
+            "spring": "bright spring light, soft green and white", "amber": "deep amber and teal evening light"}
 
 
 def pipe():

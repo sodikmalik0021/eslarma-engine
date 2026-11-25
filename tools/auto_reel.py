@@ -232,16 +232,11 @@ Make MINIMAL corrections: spelling, capitals, punctuation, obviously misheard wo
 (o', g', sh, ch; straight apostrophe). Keep every meaning and the word order, add nothing, never paraphrase.
 Arabic quotes: correct Latin transliteration. Return ONLY JSON {"subtitles": {"0": "...", "1": "...", ...}} with every index."""
 
-PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase give:
-1) "scene": the ONE library scene closest in meaning (or "none");
-2) "visual": ONE English phrase (8-18 words, ONE clear subject + place + light, plain concrete nouns, no metaphors or lists) describing the painting shown at that moment. It must show exactly what the speaker MEANS here
-   in the context of the whole speech, be understandable without sound, and be composed like film: vary close-up of an object / large figure from behind /
-   wide place / high angle / detail. Everyday Uzbek life, specific objects, light and weather. Neighbouring phrases must differ in place and shot size.
-HARD RULES for "visual": people only "seen from behind" or as small distant figures, never faces or hands in close-up; women wear hijab;
-never prophets, companions, angels or Allah (use a green dome, light, sky, road); Qur'an only as a CLOSED ornate book on a wooden stand;
-never papers, banknotes, screens, signs, calendars, numbers, letters or open books (the painter writes gibberish).
-"label": "". Do not use one scene more than 3 times. Scenes with a child or family only when the speech is about children or family.
-Return ONLY JSON {"scenes": [{"i": 0, "scene": "name", "visual": "...", "label": ""}, ...]} for ALL phrases."""
+PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase choose the ONE scene whose picture shows what the speaker
+MEANS at that moment, in the context of the whole speech (not just a similar word). A concrete thing that is named gets its literal scene.
+If no scene fits, use "none". Neighbouring phrases of the same idea may share a scene, but do not use one scene more than 3 times.
+Scenes with a child or family only when the speech is about children or family. "label": "".
+Return ONLY JSON {"scenes": [{"i": 0, "scene": "name", "label": ""}, ...]} for ALL phrases."""
 BANNED = ("paper", "banknote", "screen", "sign ", "calendar", "letter", "number", "text", "open book", "open quran", "page", "prophet", "angel",
           "face", "smil", "eyes", "portrait", "newspaper", "document", "ticket")
 
@@ -343,18 +338,18 @@ def cmd_plan(src):
         except Exception:
             return False
     listing = "\n".join(f"{i}: {p['text']}   (word hints: {', '.join(scenelib.by_words(p['text'])[:3]) or '-'})" for i, p in enumerate(ph))
-    import datetime, open_art
+    import datetime, open_art, art_prompts
     used_pal, used_vis = recent_art(rid)
     free = [p for p in open_art.PALETTES if p not in used_pal]
     plan["palette"] = free[int(hashlib.md5(rid.encode()).hexdigest(), 16) % len(free)]
     plan["planned_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    avoid = ("\n\nPICTURES OF THE LAST REELS - do not repeat them:\n- " + "\n- ".join(used_vis[-40:])) if used_vis else ""
-    r, m = ask(f"{PICK_RULES}{avoid}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
+    r, m = ask(f"{PICK_RULES}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
     if not r:
         raise SystemExit("planner: no model could pick scenes")  # never guess pictures
     models.add(m)
     pick = {int(x["i"]): x for x in r["scenes"]}
     shots, none = [], []
+    shown = list(used_vis)  # paintings of the last reels and of this one
     for i, p in enumerate(ph):
         sc, label = pick[i]["scene"], str(pick[i].get("label") or "")
         hits = scenelib.by_words(p["text"])
@@ -372,7 +367,9 @@ def cmd_plan(src):
         if shots and shots[-1]["scene"] == sc and shots[-1]["label"] == label and start - shots[-1]["start"] < 4.0:
             shots[-1]["says"] += " " + p["text"]
             continue
-        shots.append({"start": start, "says": p["text"], "scene": sc, "label": label, "visual": safe_visual(pick[i].get("visual"))})
+        vis = art_prompts.choose(sc, shown)
+        shown.append(vis)
+        shots.append({"start": start, "says": p["text"], "scene": sc, "label": label, "visual": vis})
     if len(none) > 0.2 * len(ph):
         flags.append(f"fallback-like: no matching scene for {len(none)} of {len(ph)} phrases: {none[:4]}")
     full = []  # long shots continue with another camera framing
