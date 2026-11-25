@@ -1,0 +1,16 @@
+name: beat
+on:
+  schedule: [{ cron: "3,13,23,33,43,53 * * * *" }]
+  workflow_dispatch:
+permissions: { contents: read, actions: write }
+concurrency: { group: beat }
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: sodikmalik0021/eslarma-bot, ref: main, path: priv, ssh-key: "${{ secrets.DATA_KEY }}" }
+      - run: bash run.sh setup && bash run.sh cycle
