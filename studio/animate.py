@@ -64,10 +64,12 @@ def font(sz):
     if sz not in _font: _font[sz] = ImageFont.truetype(FONT, sz)
     return _font[sz]
 
+SET = {}  # the owner's settings: sub_size, sub_y, sub_color, title_size
+
 def draw_subtitle(frame, chunk, t, keywords, handle):
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    f = font(40)
-    y = int(H * 0.775)
+    f = font(int(SET.get("sub_size", 40)))
+    y = int(H * float(SET.get("sub_y", 0.775)))
     if chunk:
         fade_in = min(1, (t - chunk["s"]) / 0.18)
         fade_out = min(1, (chunk["e"] - t) / 0.15)
@@ -89,7 +91,7 @@ def draw_subtitle(frame, chunk, t, keywords, handle):
         for w in chunk["words"]:
             spoken = t >= w["s"] - 0.03
             key = w["w"].strip(".,!?:;«»\"'").lower() in keywords
-            col = GOLD if key and spoken else GREEN
+            col = GOLD if key and spoken else tuple(int(SET["sub_color"][i:i + 2], 16) for i in (1, 3, 5)) if SET.get("sub_color") else GREEN
             alpha = a if spoken else 0.0  # words appear one by one, in sync with speech
             base = np.array(img.getpixel((int(cx), y)))
             c = tuple(int(base[k] + (col[k] - base[k]) * alpha) for k in range(3))
@@ -120,9 +122,9 @@ def draw_overlay(frame, t, dur, hook, cta):
     if show_hook:
         a = min(1, t / 0.25) * min(1, (2.6 - t) / 0.35)
         pop = 1 + 0.06 * max(0, 1 - t / 0.35)
-        f = ImageFont.truetype(HOOK_FONT, int(84 * pop))
+        f = ImageFont.truetype(HOOK_FONT, int(int(SET.get("title_size", 84)) * pop))
         lines = wrap(hook, f, W * 0.8)
-        lh = int(100 * pop); y0 = int(H * 0.30 - lh * len(lines) / 2)
+        lh = int(int(SET.get("title_size", 84)) * 1.19 * pop); y0 = int(H * 0.30 - lh * len(lines) / 2)
         bw = max(f.getlength(l) for l in lines) + 90
         d.rounded_rectangle([W / 2 - bw / 2, y0 - 40, W / 2 + bw / 2, y0 + lh * len(lines) + 30], radius=40, fill=(250, 246, 236, int(225 * a)))
         for i, l in enumerate(lines):
@@ -175,6 +177,7 @@ class Clip:
 def main(plan_path):
     plan = json.load(open(plan_path))
     dur = plan["duration"]
+    SET.update(plan.get("settings") or {})
     scenes = plan["scenes"]
     imgs = []
     for s in scenes:

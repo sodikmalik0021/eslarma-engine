@@ -350,7 +350,7 @@ NOTE_LINES = ["Eng ko'p ta'sir qilgan gapni izohda yozing 👇", "Davomini xohla
 def safe_texts(hook, rid):
     """caption and comment from fixed, correct Uzbek phrases around a title that the speaker said himself"""
     k = int(hashlib.md5(rid.encode()).hexdigest(), 16) % 3
-    cap = f"{hook}\n\n{ASK_LINES[k]}\n\n🎙 @abdulloh.domla\n\n{SEND_LINES[k]}\n\n#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon"
+    cap = f"{hook}\n\n{ASK_LINES[k]}\n\n🎙 @abdulloh.domla\n\n{SEND_LINES[k]}\n\n{settings().get('hashtags') or '#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon'}"
     return {"hook": hook, "caption": cap, "comment": NOTE_LINES[k]}
 
 
@@ -426,6 +426,8 @@ def cmd_plan(src):
     used_pal, used_vis = recent_art(rid)
     free = [p for p in open_art.PALETTES if p not in used_pal]
     plan["palette"] = free[int(hashlib.md5(rid.encode()).hexdigest(), 16) % len(free)]
+    if settings().get("palette") in open_art.PALETTES:
+        plan["palette"] = settings()["palette"]
     plan["planned_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     wish = owner_wishes() + house_rules()
     r, m = ask(f"{PICK_RULES}{wish}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
@@ -580,6 +582,13 @@ def art_shot(jpg, name, i, s):
             "cam": {"zoom": list(zoom), "focus": list(focus)}}
 
 
+def settings():
+    try:
+        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("settings") or {}
+    except Exception:
+        return {}
+
+
 def art_style():
     try:
         return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "watercolor"
@@ -642,7 +651,7 @@ def add_video(built, shots, art, rid):
         items.append({"jpg": jpg, "mp4": f"/tmp/art_{rid}/v{i:02d}.mp4", "seconds": float(b["end"]) - float(b["start"]) + 0.6,
                       "prompt": f"{art_style()} animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"})
         where.append(i)
-    if not items or os.environ.get("OPEN_VIDEO", "1") != "1":
+    if not items or os.environ.get("OPEN_VIDEO", "1") != "1" or settings().get("video_on") == "0":
         return
     pj = f"/tmp/art_{rid}_v.json"
     json.dump(items, open(pj, "w"))
@@ -700,8 +709,9 @@ def cmd_render(src, video):
         fixed.setdefault(i, seg["text"].strip())  # fall back to raw whisper text
     out = os.path.join(ROOT, "out", f"eslarma_{rid}.mp4")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    rplan = {"duration": dur, "scenes": built, "words": build_words2(tpath, fixed), "keywords": [],
-             "hook": plan.get("hook", ""), "cta": plan.get("cta", "Obuna bo'ling — har kuni eslatma"), "handle": "eslarma.uz",
+    st = settings()
+    rplan = {"settings": st, "duration": dur, "scenes": built, "words": build_words2(tpath, fixed), "keywords": [],
+             "hook": "" if st.get("title_on") == "0" else plan.get("hook", ""), "cta": st.get("cta") or plan.get("cta", "Obuna bo'ling — har kuni eslatma"), "handle": "eslarma.uz",
              "source": video, "video_only": f"/tmp/v_only{rid}.mp4", "output": out}
     rp = os.path.join(ROOT, "studio", f"plan_auto_{rid}.json")
     json.dump(rplan, open(rp, "w"), ensure_ascii=False, indent=1)
