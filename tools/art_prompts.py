@@ -57,6 +57,38 @@ ART = {
 }
 
 
+# object pictures for scenes that otherwise need people: used when the people cannot be painted without a face
+OBJECTS = {
+    "father_son": ["pair of big black boots and a pair of tiny red children's boots side by side on a doorstep", "big tree sheltering a small young tree beside it on a green hill",
+                   "big bird and a small chick together on a blooming branch"],
+    "advice_repeat": ["water drops falling on a hollowed stone, close-up", "lantern lighting a forked village path at dusk"],
+    "not_listening": ["red ball lying alone in an empty courtyard", "closed wooden gate with an iron lock"],
+    "gentle_love": ["mother bird feeding chicks in a nest on a blooming branch"],
+    "dua": ["vast starry sky over a quiet mosque with a lit window", "empty prayer rug on a hill at sunrise"],
+    "to_mosque": ["mosque with blue dome and tall minaret at dawn, birds flying"],
+    "teach_child": ["small wooden table with stacked closed books and a lamp in a madrasa room", "two pairs of shoes, big and tiny, before a madrasa door"],
+    "question": ["road fork with three empty paths in fog", "closed old wooden door at the end of a long stone corridor"],
+    "mirror_self": ["tall framed mirror in a dim room reflecting a window's light"],
+    "two_paths": ["road splitting in two through hills at dawn"],
+    "honest_work": ["strong worn hand tools, hammer and saw, on a workbench"],
+    "enemy": ["wolf standing in the dark at the edge of a forest, glowing moon"],
+    "take_money": ["leather bag full of gold coins on a doorstep"],
+    "people": ["wide bazaar street with many awnings and stalls, seen from above"],
+    "wedding": ["two golden wedding rings on white silk among rose petals"],
+}
+
+
+def objects(scene, used=()):
+    """variants of the scene without any people"""
+    v = OBJECTS.get(scene, []) + [x for x in ART.get(scene, []) if not any(p in x for p in (M, W, K)) and "man" not in x.split() and "men" not in x.split()]
+    v = list(dict.fromkeys(v))
+    return [x for x in v if x not in used] or v
+
+
+def scene_of(prompt):
+    return next((k for k, v in ART.items() if prompt in v), "")
+
+
 def choose(scene, used):
     """first variant of the scene that the last reels did not show"""
     v = ART.get(scene) or []

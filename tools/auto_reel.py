@@ -356,7 +356,8 @@ def cmd_plan(src):
         if hits and (sc == "none" or (m.startswith("local") and sc not in hits)):
             sc = hits[0]
         if sc == "none":
-            none.append(p["text"])
+            if len(p["text"].split()) > 4 and not p["text"].strip().endswith("?"):  # short fillers may keep the previous picture
+                none.append(p["text"])
             if shots:  # keep the previous picture rather than show something unrelated
                 shots[-1]["says"] += " " + p["text"]
                 continue
@@ -378,7 +379,11 @@ def cmd_plan(src):
         n = int((end - s["start"]) // 5.0)
         full.append(s)
         for j in range(1, n + 1):
-            full.append(dict(s, start=round(s["start"] + j * (end - s["start"]) / (n + 1), 2), continues=True))
+            c = dict(s, start=round(s["start"] + j * (end - s["start"]) / (n + 1), 2), continues=True)
+            alt = art_prompts.choose(s["scene"], shown)
+            if alt and alt not in shown and len(set(shown) - set(used_vis)) < 20:  # a new painting, not the same frame again
+                shown.append(alt); c["visual"] = alt; c["fresh"] = True
+            full.append(c)
     weak = [s["says"] for s in shots if not s["visual"]]
     if len(weak) > 0.15 * len(shots):
         flags.append(f"fallback-like: {len(weak)} shots have no usable painting description")
@@ -409,9 +414,10 @@ def paint(plan, shots, rid):
     vis = list(dict.fromkeys(s["visual"] for s in shots if s.get("visual")))
     if not vis:
         return {}
+    import art_prompts
     out, pj = f"/tmp/art_{rid}", f"/tmp/art_{rid}.json"
     seed = int(hashlib.md5(rid.encode()).hexdigest()[:6], 16)
-    json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "seed": seed + k} for k, v in enumerate(vis)], open(pj, "w"))
+    json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
     try:  # free the local planner model's memory first
         urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=json.dumps(
             {"model": os.environ.get("LOCAL_MODEL", "gemma3:4b"), "keep_alive": 0}).encode(), headers={"Content-Type": "application/json"}), timeout=30).read()
@@ -455,7 +461,7 @@ def art_shot(jpg, name, i, s):
     png = f"l25/{name}_art.png"
     cv2.imwrite(png, im)
     mv, zoom, focus = ART_MOVES[(i + (3 if s.get("continues") else 0)) % len(ART_MOVES)]
-    if s.get("continues"):  # second half of a long phrase: a closer view of the same painting
+    if s.get("continues") and not s.get("fresh"):  # second half of a long phrase: a closer view of the same painting
         zoom, focus = (1.38, 1.5), (.5, .45)
     kind, n = ART_AIR.get(s.get("palette"), ["dust", 24])
     return {"start": float(s["start"]), "move": mv, "layers": [{"png": png, "depth": 1.0}], "screen_particles": [[kind, n, [0, 100, 1080, 1500]]],

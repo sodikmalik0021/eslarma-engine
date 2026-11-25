@@ -75,13 +75,13 @@ CLIP_MIN = 0.25  # below: the picture does not show its description -> repaint w
 
 
 def faceless(prompt):
-    """the same scene with small dark silhouettes instead of people: used when the first painting showed a face"""
+    """the same scene with silhouettes instead of people: used when the first painting showed a face"""
     import art_prompts as A
     t = prompt
-    for a, b in ((A.M, "distant dark silhouette of a man in skullcap"), (A.W, "distant dark silhouette of a woman in long hijab"),
-                 (A.K, "small distant dark silhouette of a boy")):
+    for a, b in ((A.M, "black silhouette of a man in skullcap"), (A.W, "black silhouette of a woman in long hijab"),
+                 (A.K, "black silhouette of a small child")):
         t = t.replace(a, b)
-    return t + ", tiny distant backlit silhouettes, figures facing away, wide view"
+    return "backlit silhouettes, " + t if t != prompt else t
 
 
 def generate(items, out, w=704, h=1216, budget=125 * 60):
@@ -93,19 +93,35 @@ def generate(items, out, w=704, h=1216, budget=125 * 60):
     clip, scores, tries, faces = Clip(), {}, {}, set()
     st = [STYLE.format(palette=PALETTES.get(it.get("palette"), PALETTES["golden"])) for it in items]
     n = len(items)
-    emb = encode(p, [s + it["prompt"] for s, it in zip(st, items)] + [s + faceless(it["prompt"]) for s, it in zip(st, items)])
+    plain = [[it["prompt"], faceless(it["prompt"])] + list(it.get("alts") or [])[:2] for it in items]
+    flat = encode(p, [s + x for s, v in zip(st, plain) for x in v])
+    emb, taken = [], set()  # emb[i] = encoded variants of phrase i
+    for v in plain:
+        emb.append(flat[:len(v)]); flat = flat[len(v):]
+
+    def variant(i):
+        """1st try: as written; after a face: silhouettes; after two failures: a picture of things, not people"""
+        k = tries.get(i, 0)
+        alts = [x for x in range(2, len(plain[i])) if plain[i][x] not in taken]
+        if k >= 2 and alts:
+            x = alts[(k - 2) % len(alts)]
+            return x
+        return 1 if i in faces else 0
 
     def paint(i):
         nonlocal per
         it, k = items[i], tries.get(i, 0)
+        x = variant(i); text = plain[i][x]
+        if x >= 2:
+            taken.add(text)
         tries[i] = k + 1
         t = time.time()
-        pe, ppe = emb[i + n] if i in faces else emb[i]
+        pe, ppe = emb[i][x]
         im = p(prompt_embeds=pe, pooled_prompt_embeds=ppe, num_inference_steps=4, guidance_scale=0, width=w, height=h,
                generator=torch.Generator().manual_seed(it.get("seed", 7) + 100 * k)).images[0]
         im = im.crop((int(w * .04), int(h * .03), int(w * .96), int(h * .97)))  # painted white borders
         per = time.time() - t
-        face, sc = has_face(im), clip.score(im, it["prompt"])
+        face, sc = has_face(im), clip.score(im, text)
         print(f"ok {it['name']} try {k + 1} {per:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
         if face:
             faces.add(i)
@@ -117,7 +133,7 @@ def generate(items, out, w=704, h=1216, budget=125 * 60):
         paint(i)
     while time.time() - t0 + per * 1.1 < budget:
         missing = [i for i in range(n) if items[i]["name"] not in scores and tries[i] < 5]
-        weak = [i for i in range(n) if scores.get(items[i]["name"], 1) < CLIP_MIN and tries[i] < 3]
+        weak = [i for i in range(n) if scores.get(items[i]["name"], 1) < CLIP_MIN and tries[i] < 4]
         todo = sorted(missing, key=lambda i: tries[i]) or weak
         if not todo:
             break
