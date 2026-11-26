@@ -663,7 +663,7 @@ def add_video(built, shots, art, rid):
     pj = f"/tmp/art_{rid}_v.json"
     json.dump(items, open(pj, "w"))
     try:
-        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_video.py"), pj, str(150 * 60)], timeout=185 * 60, check=True)
+        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_video.py"), pj, str(55 * 60)], timeout=80 * 60, check=True)
     except Exception as e:
         print("animation failed:", str(e)[:200])
     for it, i in zip(items, where):
