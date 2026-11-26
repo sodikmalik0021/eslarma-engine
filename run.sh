@@ -123,4 +123,10 @@ next() { # tell the publisher, then queue the following reel here: the beat woul
   if [ -f /tmp/took ] && [ "$(need)" = 1 ]; then gh workflow run produce.yml || true; fi
 }
 
+cycle() {
+  sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+  timeout 40m python3 lab.py
+  rm -rf /tmp/media; pg worktree prune; pg fetch -q --depth 1 origin refs/heads/media && pg worktree add -q --detach /tmp/media FETCH_HEAD
+  mkdir -p /tmp/media/lab/styles; cp /tmp/lab/*.jpg /tmp/media/lab/styles/; (cd /tmp/media && git add -A lab && git commit -qm "style samples" && git push -q origin HEAD:refs/heads/media)
+}
 "$@"
