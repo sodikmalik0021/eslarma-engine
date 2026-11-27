@@ -538,7 +538,7 @@ def paint(plan, shots, rid):
     import art_prompts
     out, pj = f"/tmp/art_{rid}", f"/tmp/art_{rid}.json"
     seed = int(hashlib.md5((rid + str(plan.get("planned_at"))).encode()).hexdigest()[:6], 16)
-    json.dump([{"name": f"p{k:02d}", "prompt": v, "palette": plan.get("palette"), "style": art_style(), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
+    json.dump([{"name": f"p{k:02d}", "prompt": v, "motion": motion_of(v), "palette": plan.get("palette"), "style": art_style(), "seed": seed + k, "alts": [a for a in art_prompts.objects(art_prompts.scene_of(v), vis) if a not in vis]} for k, v in enumerate(vis)], open(pj, "w"))
     try:  # free the local planner model's memory first
         urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=json.dumps(
             {"model": os.environ.get("LOCAL_MODEL", "gemma3:4b"), "keep_alive": 0}).encode(), headers={"Content-Type": "application/json"}), timeout=30).read()
@@ -547,7 +547,7 @@ def paint(plan, shots, rid):
     gpu = False
     if os.path.exists(os.path.expanduser("~/.kaggle/kaggle.json")):  # free Kaggle GPU: full SDXL, 30 steps; the CPU path stays as the fallback
         try:
-            subprocess.run(["bash", "kaggle/run.sh", "art_gpu.py", pj, "tools/open_art.py", "tools/art_prompts.py"], cwd=ROOT, timeout=100 * 60)
+            subprocess.run(["bash", "kaggle/run.sh", "art_gpu.py", pj, "tools/open_art.py", "tools/art_prompts.py"], cwd=ROOT, timeout=165 * 60)
             src = "/tmp/kout/out" if os.path.isdir("/tmp/kout/out") else "/tmp/kout"
             os.makedirs(out, exist_ok=True)
             for f in os.listdir(src):
@@ -663,6 +663,12 @@ LIVE = (("stream", "water flows and sparkles"), ("water", "water moves and glitt
         ("plov", "steam rises from the food"), ("candle", "the flame flickers"), ("sea", "waves roll"), ("coins", "coins glitter"), ("rose", "petals tremble"))
 
 
+def motion_of(v):
+    """what moves in the painting: the GPU makes a real clip from this"""
+    acts = [a for k, a in LIVE if k in v][:3] or ["light changes gently, dust floats in the air"]
+    return f"{art_style()} animation, {v}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"
+
+
 def add_video(built, shots, art, rid):
     """every painting becomes a moving clip; what is not animated keeps the still painting with a moving camera"""
     items, where = [], []
@@ -676,10 +682,19 @@ def add_video(built, shots, art, rid):
         where.append(i)
     if not items or os.environ.get("OPEN_VIDEO", "1") != "1" or settings().get("video_on") == "0":
         return
+    for it in items:  # clips already made on the Kaggle GPU next to the painting: fit them to the phrase length
+        clip = os.path.join(os.path.dirname(it["jpg"]), "v_" + os.path.basename(it["jpg"])[:-4] + ".mp4")
+        if os.path.exists(clip) and os.path.getsize(clip) > 5000:
+            sl = max(1.0, min(1.6, it["seconds"] / 4.0))
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", clip, "-vf", f"setpts={sl:.3f}*PTS,tpad=stop_mode=clone:stop_duration=6,fps=24",
+                            "-t", f"{it['seconds']:.2f}", "-an", "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p", it["mp4"]])
+    rest = [it for it in items if not (os.path.exists(it["mp4"]) and os.path.getsize(it["mp4"]) > 5000)]
+    print(f"gpu clips: {len(items) - len(rest)} of {len(items)}", flush=True)
     pj = f"/tmp/art_{rid}_v.json"
-    json.dump(items, open(pj, "w"))
+    json.dump(rest, open(pj, "w"))
     try:
-        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_video.py"), pj, str(55 * 60)], timeout=80 * 60, check=True)
+        if rest:
+            subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_video.py"), pj, str(55 * 60)], timeout=80 * 60, check=True)
     except Exception as e:
         print("animation failed:", str(e)[:200])
     for it, i in zip(items, where):
