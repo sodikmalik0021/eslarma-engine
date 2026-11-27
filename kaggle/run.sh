@@ -4,8 +4,7 @@ set -u
 U=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.kaggle/kaggle.json')))['username'])")
 SLUG=eslarma-$(basename "$1" .py | tr '_' '-')
 D=/tmp/kpush; rm -rf $D /tmp/kout; mkdir -p $D /tmp/kout
-cp "kaggle/$1" $D/main.py
-for f in "${@:2}"; do cp "$f" $D/; done
+python3 kaggle/pack.py "$1" "${@:2}" > $D/main.py
 cat > $D/kernel-metadata.json <<J
 {"id":"$U/$SLUG","title":"$SLUG","code_file":"main.py","language":"python","kernel_type":"script","is_private":true,"enable_gpu":true,"enable_internet":true,"dataset_sources":[],"competition_sources":[],"kernel_sources":[]}
 J
