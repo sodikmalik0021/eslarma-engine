@@ -2,13 +2,15 @@ name: produce
 on:
   schedule: [{ cron: "41 1,5,9,13,17,21 * * *" }]
   workflow_dispatch:
+    inputs:
+      force: { description: "make one reel even when the stock is full", default: "0" }
 permissions: { contents: read, actions: write }
 concurrency: { group: produce }
 jobs:
   reel:
     runs-on: ubuntu-latest
     timeout-minutes: 340
-    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}", LOCAL_MODEL: "gemma3:12b", QA_SEPARATE: "1" }
+    env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}", LOCAL_MODEL: "gemma3:12b", QA_SEPARATE: "1", FORCE: "${{ inputs.force }}" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4

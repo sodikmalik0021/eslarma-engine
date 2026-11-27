@@ -114,7 +114,7 @@ for k in 1 2 3; do ollama pull $LOCAL_MODEL > /dev/null 2>&1 && break; sleep 20;
 
 make() { # produce.yml: whole job
   setup || return 1
-  [ "$(need)" = 1 ] || { echo "stock is full"; return 0; }
+  [ "${FORCE:-}" = 1 ] || [ "$(need)" = 1 ] || { echo "stock is full"; return 0; }
   machine; produce; rm -f /tmp/took; [ -n "$S" ] && touch /tmp/took; return 0
 }
 
