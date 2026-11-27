@@ -3,19 +3,19 @@
 import json, os, subprocess, time
 subprocess.run("pip install -q -U diffusers transformers accelerate safetensors opencv-python-headless", shell=True)
 import torch
-from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler, AutoencoderKL
 import open_art as A
 
 ITEMS = json.load(open("/kaggle/working/src/" + [n for n in FILES if n.endswith(".json")][0], encoding="utf-8"))
 OUT = "/kaggle/working/out"; os.makedirs(OUT, exist_ok=True)
-W, H, STEPS, CFG, BUDGET = 832, 1472, 24, 5.0, 25 * 60
-NEG = ("photo, photorealistic, 3d render, watercolor bleed, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
+W, H, STEPS, CFG, BUDGET = 832, 1472, 8, 2.0, 20 * 60
+NEG = ("photo, photograph, photorealistic, realistic, 3d render, cgi, bokeh, repeating pattern wallpaper, pattern only, tiled background, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
        "text, letters, watermark, signature, logo, frame, border, blurry, lowres, jpeg artifacts, deformed hands, extra fingers, "
        "close-up face, portrait, nudity")
 t0 = time.time()
 PIPES = []  # one painter per GPU (Kaggle gives two T4): both paint at the same time
 for d in range(max(1, torch.cuda.device_count())):
-    q = StableDiffusionXLPipeline.from_pretrained("RunDiffusion/Juggernaut-XL-v9", torch_dtype=torch.float16, variant="fp16", use_safetensors=True).to(f"cuda:{d}")
+    q = StableDiffusionXLPipeline.from_pretrained("Lykon/dreamshaper-xl-v2-turbo", vae=AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16), torch_dtype=torch.float16, use_safetensors=True).to(f"cuda:{d}")
     q.scheduler = DPMSolverMultistepScheduler.from_config(q.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++")
     q.vae.enable_tiling(); q.set_progress_bar_config(disable=True); PIPES.append(q)
 print(f"model ready {time.time()-t0:.0f}s", flush=True)

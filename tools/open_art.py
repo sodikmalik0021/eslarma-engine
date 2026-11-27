@@ -11,7 +11,7 @@ STYLES = {"watercolor": "loose watercolor painting on textured paper, soft trans
           "miniature": "Persian miniature painting, flat perspective, ornate details, gold accents",
           "cinematic": "cinematic realistic digital painting, dramatic lighting, depth of field",
           "pencil": "detailed colored pencil drawing on white paper, visible hatching strokes",
-          "flat": "flat 2D Uzbek illustration, cobalt blue and white Pakhta-gul ornaments, ikat adras textile patterns, turquoise tiled domes, warm sand and gold accents, subtle paper grain, clean simple shapes, faceless people"}
+          "flat": "flat 2D storybook illustration of one clear scene, soft muted colors, Uzbek details as accents only: blue-white Pakhta-gul pottery, ikat adras clothes, turquoise tiled domes, warm sand and gold, subtle paper grain, simple shapes, faceless people"}
 STYLE = "{style}, {palette}, full bleed scene of: "
 PALETTES = {"golden": "golden afternoon light, ochre and olive", "rose": "dusty rose sunset light, mauve and peach", "mint": "fresh morning light, sage green and cream",
             "night": "moonlit evening, indigo and warm lantern light", "desert": "warm sand, terracotta and turquoise", "rain": "soft overcast light, blue-grey and amber",
