@@ -9,7 +9,7 @@ import open_art as A
 ITEMS = json.load(open("/kaggle/working/src/" + [n for n in FILES if n.endswith(".json")][0], encoding="utf-8"))
 OUT = "/kaggle/working/out"; os.makedirs(OUT, exist_ok=True)
 W, H, STEPS, CFG, BUDGET = 832, 1472, 30, 5.0, 40 * 60
-NEG = ("church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
+NEG = ("photo, photorealistic, 3d render, watercolor bleed, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
        "text, letters, watermark, signature, logo, frame, border, blurry, lowres, jpeg artifacts, deformed hands, extra fingers, "
        "close-up face, portrait, nudity")
 t0 = time.time()

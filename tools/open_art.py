@@ -10,7 +10,8 @@ STYLES = {"watercolor": "loose watercolor painting on textured paper, soft trans
           "gouache": "flat gouache storybook illustration, matte opaque colours, simple shapes",
           "miniature": "Persian miniature painting, flat perspective, ornate details, gold accents",
           "cinematic": "cinematic realistic digital painting, dramatic lighting, depth of field",
-          "pencil": "detailed colored pencil drawing on white paper, visible hatching strokes"}
+          "pencil": "detailed colored pencil drawing on white paper, visible hatching strokes",
+          "flat": "flat 2D illustration, muted earthy pastel colours beige sage green terracotta dusty blue, subtle paper grain, clean simple shapes, faceless people, soft flat shading"}
 STYLE = "{style}, {palette}, full bleed scene of: "
 PALETTES = {"golden": "golden afternoon light, ochre and olive", "rose": "dusty rose sunset light, mauve and peach", "mint": "fresh morning light, sage green and cream",
             "night": "moonlit evening, indigo and warm lantern light", "desert": "warm sand, terracotta and turquoise", "rain": "soft overcast light, blue-grey and amber",
