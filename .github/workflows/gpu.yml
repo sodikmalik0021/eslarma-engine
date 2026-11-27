@@ -1,0 +1,22 @@
+name: gpu
+# Runs a script on a free Kaggle GPU and brings its output back. Used by the engine for paintings and motion.
+on:
+  workflow_dispatch:
+    inputs:
+      task: { description: "script in kaggle/ to run", default: "check.py" }
+permissions: { contents: read }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: kaggle
+        env: { KAGGLE_JSON: "${{ secrets.KAGGLE_JSON }}" }
+        run: |
+          mkdir -p ~/.kaggle && printf '%s' "$KAGGLE_JSON" > ~/.kaggle/kaggle.json && chmod 600 ~/.kaggle/kaggle.json
+          pip install -q kaggle
+          bash kaggle/run.sh "${{ inputs.task }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: gpu-out, path: /tmp/kout, if-no-files-found: ignore }
