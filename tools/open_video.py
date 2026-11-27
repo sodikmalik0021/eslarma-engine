@@ -105,6 +105,13 @@ if __name__ == "__main__":
     items, budget = json.load(open(sys.argv[1], encoding="utf-8")), float(sys.argv[2])
     pip = [sys.executable, "-m", "pip", "install", "--quiet", "--no-cache-dir"]
     subprocess.run(pip + ["-U", "protobuf>=5.29", "sentencepiece"], check=False)
+    try:  # when the paintings came from the Kaggle GPU, nothing installed torch on this runner yet
+        import torch  # noqa: F401
+    except ImportError:
+        subprocess.run(pip + ["torch", "--index-url", "https://download.pytorch.org/whl/cpu"], check=False)
+        subprocess.run(pip + ["diffusers", "transformers<5", "accelerate", "safetensors", "pillow", "huggingface_hub", "opencv-python-headless<5"], check=False)
+        import importlib, site
+        site.addsitedir(site.getusersitepackages()); importlib.invalidate_caches()
     try:
         left = animate(items, budget)
     except Exception as e:
