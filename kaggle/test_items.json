@@ -1,3 +1,56 @@
-[{"name":"p00","prompt":"round carpet with teapot and tea bowls under an old tree, evening lamp","motion":"flat 2D animation, steam rises from the teapot, leaves of the old tree sway in the wind, warm lamp light flickers, smooth slow camera push in","palette":"mint","style":"flat","seed":1234,"alts":[]},
-{"name":"p01","prompt":"Uzbek man in white skullcap and dark blue coat seen from behind sitting on a hill at sunrise","motion":"flat 2D animation, the man sitting on the hill slowly raises his open hands in prayer, grass waves in the wind, clouds drift, sunrise light grows, smooth slow camera push in","palette":"mint","style":"flat","seed":1240,"alts":[]},
-{"name":"p02","prompt":"green dome and white minaret of Medina under a starry night sky","motion":"flat 2D animation, stars twinkle, clouds drift slowly across the moon, palm leaves sway, smooth slow camera push in","palette":"mint","style":"flat","seed":1237,"alts":[]}]
+[
+ {
+  "name": "p00",
+  "prompt": "A traditional Uzbek clay courtyard with a pile of heavy iron chains on the dusty ground.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 7,
+  "alts": []
+ },
+ {
+  "name": "p01",
+  "prompt": "A plastic blue ID card resting on a wooden counter inside a shop.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 8,
+  "alts": []
+ },
+ {
+  "name": "p02",
+  "prompt": "A rusted metal animal trap hidden among dry weeds on the ground.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 9,
+  "alts": []
+ },
+ {
+  "name": "p03",
+  "prompt": "A neat stack of golden coins resting on a traditional ikat fabric.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 10,
+  "alts": []
+ },
+ {
+  "name": "p04",
+  "prompt": "A thick hemp rope noose hanging ominously from a wooden ceiling beam.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 11,
+  "alts": []
+ },
+ {
+  "name": "p05",
+  "prompt": "A dead-end narrow alleyway enclosed by high impassable clay walls.",
+  "motion": "",
+  "palette": "rose",
+  "style": "uzbek",
+  "seed": 12,
+  "alts": []
+ }
+]

@@ -1,3 +1,4 @@
+# The subject goes FIRST: the text model reads only 77 tokens, a long style in front cut the subject off.
 # Paintings on a free Kaggle GPU (Tesla T4): full SDXL model, 30 steps, higher resolution, negative prompt.
 # Same rules as tools/open_art.py: a picture with a face is redrawn as silhouettes, a picture that misses its phrase is repainted.
 import json, os, subprocess, time
@@ -30,7 +31,7 @@ def paint(i, g=0):
     x = alts[(k - 2) % len(alts)] if k >= 2 and alts else (1 if i in faces else 0)
     text = plain[i][x]; tries[i] = k + 1
     t = time.time()
-    im = p(prompt=st[i] + text + ", " + st[i].split(",")[0] + ", masterpiece, highly detailed", negative_prompt=NEG, num_inference_steps=STEPS,
+    im = p(prompt=text + ". " + st[i].replace("full bleed scene of: ", "") + "masterpiece", negative_prompt=NEG, num_inference_steps=STEPS,
            guidance_scale=CFG, width=W, height=H, generator=torch.Generator(f"cuda:{g}").manual_seed(it.get("seed", 7) + 100 * k)).images[0]
     face, sc = A.has_face(im), clip.score(im, text)
     print(f"ok {it['name']} try {k + 1} {time.time()-t:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
