@@ -273,6 +273,22 @@ Religious meanings: "dunyo" (as opposed to oxirat, qalb, ibodat) = worldly wealt
 If no scene fits, use "none". Neighbouring phrases of the same idea may share a scene, but do not use one scene more than 3 times.
 Scenes with a child or family only when the speech is about children or family. "label": "".
 Return ONLY JSON {"scenes": [{"i": 0, "scene": "name", "label": ""}, ...]} for ALL phrases."""
+PIC_RULES = """You are the art director of eslarma.uz reels (Uzbek Islamic talks). For EVERY phrase write the ONE picture that shows
+exactly what the speaker says in that phrase, in the context of the whole speech. The viewer must see the spoken words.
+- Concrete things named in the phrase are painted literally (pul -> gold coins, daraxt -> tree, uy -> house, yomg'ir -> rain, masjid -> mosque).
+- Abstract ideas become ONE clear symbolic object or place that means the same (sabr -> small sapling in dry soil, umr -> hourglass, gunoh -> dark thorns).
+- NO PEOPLE AT ALL: no man, woman, child, hands, figures, silhouettes or crowds. Show objects, nature, houses, streets, mosques, food, animals instead.
+- Uzbek setting: clay houses, courtyards with grape vines, blue-tiled domes, bazaars, teapots and piyola, plov, ikat fabric, Rishtan pottery.
+- No text, letters, books with pages, screens, crosses or churches. 8-25 English words per picture, one subject, simple.
+Return ONLY JSON {"pics": [{"i": 0, "pic": "..."}, ...] for ALL phrases, "cover": "one picture for the whole speech"}."""
+PEOPLE = re.compile(r"\b(man|men|woman|women|person|people|boy|girl|child|children|kid|father|mother|son|daughter|family|crowd|figure|silhouette|hand|hands|worshipper|pilgrims?|farmer|imam|he|she)\b", re.I)
+
+
+def pic_ok(v):
+    v = " ".join(str(v or "").split())
+    return 4 <= len(v.split()) <= 40 and not PEOPLE.search(v) and not any(b in v.lower() + " " for b in BANNED)
+
+
 BANNED = ("paper", "banknote", "screen", "sign ", "calendar", "letter", "number", "text", "open book", "open quran", "page", "prophet", "angel",
           "face", "smil", "eyes", "portrait", "newspaper", "document", "ticket")
 
@@ -448,6 +464,13 @@ def cmd_plan(src):
                 f'Return ONLY JSON {{"theme": ["scene", ...]}}.\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}', ok_theme, 200)
     theme = [s for s in (th or {}).get("theme", []) if s in scenelib.SCENES]
     print("theme:", theme)
+    pics, cover_pic = {}, None
+    pr, _ = ask(f"{PIC_RULES}{owner_wishes()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)),
+                lambda x: isinstance(x, dict) and isinstance(x.get("pics"), list) and sum(pic_ok(y.get("pic")) for y in x["pics"] if isinstance(y, dict)) >= 0.8 * len(ph), 4000)
+    if pr:
+        pics = {int(y["i"]): " ".join(y["pic"].split()) for y in pr["pics"] if isinstance(y, dict) and str(y.get("i", "")).isdigit() and pic_ok(y.get("pic"))}
+        cover_pic = pr.get("cover") if pic_ok(pr.get("cover")) else None
+    print(f"own pictures: {len(pics)} of {len(ph)}")
 
     def fresh():  # topic scenes that still have an unseen painting
         return [s for s in theme if any(v not in shown for v in art_prompts.ART.get(s, []))]
@@ -456,6 +479,13 @@ def cmd_plan(src):
     shown = list(used_vis)  # paintings of the last reels and of this one
     for i, p in enumerate(ph):
         sc, label = pick[i]["scene"], str(pick[i].get("label") or "")
+        if i in pics:  # the picture of exactly these words
+            if shots and p["start"] - shots[-1]["start"] < 1.4:
+                shots[-1]["says"] += " " + p["text"]
+                continue
+            shown.append(pics[i])
+            shots.append({"start": 0.0 if not shots else p["start"], "says": p["text"], "scene": sc if sc in scenelib.SCENES else "question", "label": "", "visual": pics[i]})
+            continue
         hits = scenelib.by_words(p["text"])
         if hits and (sc == "none" or (m.startswith("local") and sc not in hits)):
             sc = hits[0]
@@ -496,7 +526,7 @@ def cmd_plan(src):
             alt = art_prompts.choose(s["scene"], shown)
             if alt in shown:
                 alt = next((v for x in theme for v in art_prompts.ART.get(x, []) if v not in shown), alt)
-            if alt and alt not in shown and len(set(shown) - set(used_vis)) < 20:  # a new painting, not the same frame again
+            if not pics and alt and alt not in shown and len(set(shown) - set(used_vis)) < 20:  # a new painting, not the same frame again
                 shown.append(alt); c["visual"] = alt; c["fresh"] = True
             full.append(c)
     weak = [s["says"] for s in shots if not s["visual"]]
@@ -508,7 +538,7 @@ def cmd_plan(src):
                 lambda x: isinstance(x, dict) and x.get("cover") in scenelib.SCENES, 60)
     cs = (cv or {}).get("cover") or (theme[0] if theme else None)
     opts = art_prompts.ART.get(cs) or []
-    plan["cover_visual"] = next((v for v in opts if v not in used_vis), opts[0] if opts else None)
+    plan["cover_visual"] = cover_pic or next((v for v in opts if v not in used_vis), opts[0] if opts else None)
     uses = {}  # the same scene again = another variant/seed and another framing, never the identical frame
     for s in full:
         k = uses[s["scene"]] = uses.get(s["scene"], 0) + (0 if s.get("continues") else 1)
@@ -614,9 +644,9 @@ def settings():
 
 def art_style():
     try:
-        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "flat"
+        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "uzbek"
     except Exception:
-        return "flat"
+        return "uzbek"
 
 
 def make_cover(plan, jpg, rid):
@@ -666,7 +696,7 @@ LIVE = (("stream", "water flows and sparkles"), ("water", "water moves and glitt
 def motion_of(v):
     """what moves in the painting: the GPU makes a real clip from this"""
     acts = [a for k, a in LIVE if k in v][:3] or ["light changes gently, dust floats in the air"]
-    return f"{art_style()} animation, {v}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"
+    return f"{art_style()} animation, {v}, {', '.join(acts)}, clouds drift slowly, no people, smooth slow camera push in"
 
 
 def add_video(built, shots, art, rid):
@@ -678,7 +708,7 @@ def add_video(built, shots, art, rid):
             continue
         acts = [a for k, a in LIVE if k in s["visual"]][:3] or ["light changes gently, dust floats in the air"]
         items.append({"jpg": jpg, "mp4": f"/tmp/art_{rid}/v{i:02d}.mp4", "seconds": float(b["end"]) - float(b["start"]) + 0.6,
-                      "prompt": f"{art_style()} animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, people stay seen from behind, smooth slow camera push in"})
+                      "prompt": f"{art_style()} animation, {s['visual']}, {', '.join(acts)}, clouds drift slowly, no people, smooth slow camera push in"})
         where.append(i)
     if not items or os.environ.get("OPEN_VIDEO", "1") != "1" or settings().get("video_on") == "0":
         return
