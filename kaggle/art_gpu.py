@@ -15,7 +15,7 @@ NEG = ("church, christian cross, crucifix, stained glass window, gothic cathedra
 t0 = time.time()
 p = StableDiffusionXLPipeline.from_pretrained("RunDiffusion/Juggernaut-XL-v9", torch_dtype=torch.float16, variant="fp16", use_safetensors=True).to("cuda")
 p.scheduler = DPMSolverMultistepScheduler.from_config(p.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++")
-p.enable_vae_tiling()
+p.vae.enable_tiling()
 print(f"model ready {time.time()-t0:.0f}s", flush=True)
 clip, scores, tries, faces = A.Clip(), {}, {}, set()
 st = [A.STYLE.format(palette=A.PALETTES.get(it.get("palette"), A.PALETTES["golden"]), style=A.STYLES.get(it.get("style"), A.STYLES["watercolor"])) for it in ITEMS]
