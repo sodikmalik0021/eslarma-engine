@@ -8,28 +8,30 @@ import open_art as A
 
 ITEMS = json.load(open("/kaggle/working/src/" + [n for n in FILES if n.endswith(".json")][0], encoding="utf-8"))
 OUT = "/kaggle/working/out"; os.makedirs(OUT, exist_ok=True)
-W, H, STEPS, CFG, BUDGET = 832, 1472, 30, 5.0, 40 * 60
+W, H, STEPS, CFG, BUDGET = 832, 1472, 24, 5.0, 25 * 60
 NEG = ("photo, photorealistic, 3d render, watercolor bleed, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
        "text, letters, watermark, signature, logo, frame, border, blurry, lowres, jpeg artifacts, deformed hands, extra fingers, "
        "close-up face, portrait, nudity")
 t0 = time.time()
-p = StableDiffusionXLPipeline.from_pretrained("RunDiffusion/Juggernaut-XL-v9", torch_dtype=torch.float16, variant="fp16", use_safetensors=True).to("cuda")
-p.scheduler = DPMSolverMultistepScheduler.from_config(p.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++")
-p.vae.enable_tiling()
+PIPES = []  # one painter per GPU (Kaggle gives two T4): both paint at the same time
+for d in range(max(1, torch.cuda.device_count())):
+    q = StableDiffusionXLPipeline.from_pretrained("RunDiffusion/Juggernaut-XL-v9", torch_dtype=torch.float16, variant="fp16", use_safetensors=True).to(f"cuda:{d}")
+    q.scheduler = DPMSolverMultistepScheduler.from_config(q.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++")
+    q.vae.enable_tiling(); q.set_progress_bar_config(disable=True); PIPES.append(q)
 print(f"model ready {time.time()-t0:.0f}s", flush=True)
 clip, scores, tries, faces = A.Clip(), {}, {}, set()
 st = [A.STYLE.format(palette=A.PALETTES.get(it.get("palette"), A.PALETTES["golden"]), style=A.STYLES.get(it.get("style"), A.STYLES["watercolor"])) for it in ITEMS]
 plain = [[it["prompt"], A.faceless(it["prompt"])] + list(it.get("alts") or [])[:2] for it in ITEMS]
 
 
-def paint(i):
-    it, k = ITEMS[i], tries.get(i, 0)
+def paint(i, g=0):
+    it, k, p = ITEMS[i], tries.get(i, 0), PIPES[g]
     alts = list(range(2, len(plain[i])))
     x = alts[(k - 2) % len(alts)] if k >= 2 and alts else (1 if i in faces else 0)
     text = plain[i][x]; tries[i] = k + 1
     t = time.time()
     im = p(prompt=st[i] + text + ", " + st[i].split(",")[0] + ", masterpiece, highly detailed", negative_prompt=NEG, num_inference_steps=STEPS,
-           guidance_scale=CFG, width=W, height=H, generator=torch.Generator("cuda").manual_seed(it.get("seed", 7) + 100 * k)).images[0]
+           guidance_scale=CFG, width=W, height=H, generator=torch.Generator(f"cuda:{g}").manual_seed(it.get("seed", 7) + 100 * k)).images[0]
     face, sc = A.has_face(im), clip.score(im, text)
     print(f"ok {it['name']} try {k + 1} {time.time()-t:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
     if face:
@@ -38,14 +40,23 @@ def paint(i):
         im.save(os.path.join(OUT, it["name"] + ".jpg"), quality=95); scores[it["name"]] = round(sc, 3)
 
 
-for i in range(len(ITEMS)):
-    paint(i)
+from concurrent.futures import ThreadPoolExecutor
+
+
+def batch(ids):
+    """the GPUs take turns over the list: picture k goes to GPU k % n"""
+    n = len(PIPES)
+    with ThreadPoolExecutor(n) as ex:
+        list(ex.map(lambda g: [paint(i, g) for i in ids[g::n]], range(n)))
+
+
+batch(list(range(len(ITEMS))))
 while time.time() - t0 < BUDGET:
     todo = sorted([i for i in range(len(ITEMS)) if ITEMS[i]["name"] not in scores and tries[i] < 5], key=lambda i: tries[i]) or \
            [i for i in range(len(ITEMS)) if scores.get(ITEMS[i]["name"], 1) < A.CLIP_MIN and tries[i] < 6]
     if not todo:
         break
-    paint(todo[0])
+    batch(todo[:len(PIPES)])
 json.dump(scores, open(os.path.join(OUT, "_clip.json"), "w"))
 json.dump([it["name"] for it in ITEMS if it["name"] not in scores], open(os.path.join(OUT, "_faces.json"), "w"))
 print(f"done {len(scores)}/{len(ITEMS)} in {time.time()-t0:.0f}s", flush=True)
@@ -53,7 +64,7 @@ print(f"done {len(scores)}/{len(ITEMS)} in {time.time()-t0:.0f}s", flush=True)
 # ---------- motion: every painting becomes a real video clip (LTX-Video 2B on the GPU) ----------
 import gc, subprocess as sp
 import numpy as np
-del p; gc.collect(); torch.cuda.empty_cache()
+del PIPES; gc.collect(); torch.cuda.empty_cache()
 VB = 150 * 60  # whole kernel budget incl. paintings
 try:
     from diffusers import LTXConditionPipeline, LTXVideoTransformer3DModel
@@ -78,7 +89,7 @@ try:
         for tryk in range(2):
             fr = vp(conditions=[LTXVideoCondition(image=im, frame_index=0)], prompt=it.get("motion") or it["prompt"],
                     negative_prompt="worst quality, inconsistent motion, blurry, jittery, distorted, morphing faces, text",
-                    width=VW, height=VH, num_frames=N, frame_rate=FPS, num_inference_steps=10, guidance_scale=1.0,
+                    width=VW, height=VH, num_frames=N, frame_rate=FPS, num_inference_steps=8, guidance_scale=1.0,
                     decode_timestep=0.05, image_cond_noise_scale=0.025, generator=torch.Generator("cuda").manual_seed(11 + i + 50 * tryk),
                     output_type="np").frames[0]
             fr = [(f * 255).clip(0, 255).astype(np.uint8) for f in fr]
