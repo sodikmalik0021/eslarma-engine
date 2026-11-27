@@ -15,6 +15,9 @@ jobs:
         with: { repository: sodikmalik0021/eslarma-bot, ref: main, path: priv, ssh-key: "${{ secrets.DATA_KEY }}" }
       - uses: actions/cache@v4
         with: { path: ~/.ollama/models, key: models-1 }
+      - name: kaggle gpu
+        env: { KAGGLE_JSON: "${{ secrets.KAGGLE_JSON }}" }
+        run: if [ -n "$KAGGLE_JSON" ]; then mkdir -p ~/.kaggle && printf "%s" "$KAGGLE_JSON" > ~/.kaggle/kaggle.json && chmod 600 ~/.kaggle/kaggle.json && pip install -q kaggle; fi
       - run: bash run.sh make
       - if: always()
         run: bash run.sh next

@@ -544,10 +544,26 @@ def paint(plan, shots, rid):
             {"model": os.environ.get("LOCAL_MODEL", "gemma3:4b"), "keep_alive": 0}).encode(), headers={"Content-Type": "application/json"}), timeout=30).read()
     except Exception:
         pass
-    try:
-        subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=120 * 60)
-    except Exception as e:
-        print("painting failed:", str(e)[:200])
+    gpu = False
+    if os.path.exists(os.path.expanduser("~/.kaggle/kaggle.json")):  # free Kaggle GPU: full SDXL, 30 steps; the CPU path stays as the fallback
+        try:
+            subprocess.run(["bash", "kaggle/run.sh", "art_gpu.py", pj, "tools/open_art.py", "tools/art_prompts.py"], cwd=ROOT, timeout=100 * 60)
+            src = "/tmp/kout/out" if os.path.isdir("/tmp/kout/out") else "/tmp/kout"
+            os.makedirs(out, exist_ok=True)
+            for f in os.listdir(src):
+                if f.endswith((".jpg", ".json")):
+                    import shutil
+                    shutil.copy(os.path.join(src, f), os.path.join(out, f))
+            got = sum(os.path.exists(f"{out}/p{k:02d}.jpg") for k in range(len(vis)))
+            gpu = got >= 0.85 * len(vis)
+            print(f"gpu paintings: {got} of {len(vis)}", flush=True)
+        except Exception as e:
+            print("gpu painting failed:", str(e)[:200])
+    if not gpu:
+        try:
+            subprocess.run([sys.executable, os.path.join(ROOT, "tools/open_art.py"), pj, out], check=True, timeout=120 * 60)
+        except Exception as e:
+            print("painting failed:", str(e)[:200])
     art = {v: f"{out}/p{k:02d}.jpg" for k, v in enumerate(vis) if os.path.exists(f"{out}/p{k:02d}.jpg")}
     if len(art) < 0.85 * len(vis):  # mixed styles look broken: say so, QA will stop the reel
         plan.setdefault("quality_flags", []).append(f"fallback-like: only {len(art)} of {len(vis)} pictures painted")
