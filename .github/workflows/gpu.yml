@@ -17,7 +17,7 @@ jobs:
         run: |
           mkdir -p ~/.kaggle && printf '%s' "$KAGGLE_JSON" > ~/.kaggle/kaggle.json && chmod 600 ~/.kaggle/kaggle.json
           pip install -q kaggle
-          bash kaggle/run.sh "${{ inputs.task }}" ${{ inputs.files }}
+          KSLUG=test bash kaggle/run.sh "${{ inputs.task }}" ${{ inputs.files }}
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: gpu-out, path: /tmp/kout, if-no-files-found: ignore }

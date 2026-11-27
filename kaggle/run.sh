@@ -2,7 +2,7 @@
 # kaggle/run.sh SCRIPT [extra files...]: push SCRIPT as a private GPU kernel, wait, download its output to /tmp/kout
 set -u
 U=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.kaggle/kaggle.json')))['username'])")
-SLUG=eslarma-$(basename "$1" .py | tr '_' '-')
+SLUG=eslarma-$(basename "$1" .py | tr '_' '-')${KSLUG:+-$KSLUG}
 D=/tmp/kpush; rm -rf $D /tmp/kout; mkdir -p $D /tmp/kout
 python3 kaggle/pack.py "$1" "${@:2}" > $D/main.py
 cat > $D/kernel-metadata.json <<J
