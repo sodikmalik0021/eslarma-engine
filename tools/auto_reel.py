@@ -543,7 +543,7 @@ def cmd_plan(src):
     for s in full:
         k = uses[s["scene"]] = uses.get(s["scene"], 0) + (0 if s.get("continues") else 1)
         s["seed"] = k
-    if full and max(uses.values()) > max(3, 0.3 * len(full)):
+    if full and not pics and max(uses.values()) > max(3, 0.3 * len(full)):  # own pictures differ even within one scene
         flags.append(f"repetitive: one scene used {max(uses.values())} times in {len(full)} shots")
     for s in full:
         s["palette"] = plan["palette"]
@@ -581,7 +581,7 @@ def paint(plan, shots, rid):
             src = "/tmp/kout/out" if os.path.isdir("/tmp/kout/out") else "/tmp/kout"
             os.makedirs(out, exist_ok=True)
             for f in os.listdir(src):
-                if f.endswith((".jpg", ".json")):
+                if f.endswith((".jpg", ".json", ".mp4")):  # .mp4 = the moving clips made on the GPU
                     import shutil
                     shutil.copy(os.path.join(src, f), os.path.join(out, f))
             got = sum(os.path.exists(f"{out}/p{k:02d}.jpg") for k in range(len(vis)))
