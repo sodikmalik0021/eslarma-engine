@@ -279,6 +279,7 @@ exactly what the speaker says in that phrase, in the context of the whole speech
 - Abstract ideas become ONE clear symbolic object or place that means the same (sabr -> small sapling in dry soil, umr -> hourglass, gunoh -> dark thorns).
 - NO PEOPLE AT ALL: no man, woman, child, hands, figures, silhouettes or crowds. Show objects, nature, houses, streets, mosques, food, animals instead.
 - Uzbek setting: clay houses, courtyards with grape vines, blue-tiled domes, bazaars, teapots and piyola, plov, ikat fabric, Rishtan pottery.
+- Show a calm WIDE scene that contains the object (street, courtyard, room, road, landscape), like a page of an animated storybook, not a macro close-up.
 - No text, letters, books with pages, screens, crosses or churches. 8-25 English words per picture, one subject, simple.
 Return ONLY JSON {"pics": [{"i": 0, "pic": "..."}, ...] for ALL phrases, "cover": "one picture for the whole speech"}."""
 PEOPLE = re.compile(r"\b(man|men|woman|women|person|people|boy|girl|child|children|kid|father|mother|son|daughter|family|crowd|figure|silhouette|hand|hands|worshipper|pilgrims?|farmer|imam|he|she)\b", re.I)

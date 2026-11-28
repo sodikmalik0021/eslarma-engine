@@ -10,7 +10,7 @@ import open_art as A
 ITEMS = json.load(open("/kaggle/working/src/" + [n for n in FILES if n.endswith(".json")][0], encoding="utf-8"))
 OUT = "/kaggle/working/out"; os.makedirs(OUT, exist_ok=True)
 W, H, STEPS, CFG, BUDGET = 832, 1472, 8, 2.0, 20 * 60
-NEG = ("photo, photograph, photorealistic, realistic, 3d render, cgi, bokeh, glossy, dramatic realistic lighting, detailed shading, busy, cluttered, many objects, intricate ornaments, ornate patterns everywhere, repeating pattern wallpaper, tiled background, saturated colors, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
+NEG = ("photo, photograph, photorealistic, realistic, 3d render, cgi, bokeh, glossy, dramatic realistic lighting, detailed shading, photographic texture, realistic wood grain, busy, cluttered, many objects, intricate ornaments, ornate patterns everywhere, repeating pattern wallpaper, tiled background, saturated colors, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
        "text, letters, watermark, signature, logo, frame, border, blurry, lowres, jpeg artifacts, deformed hands, extra fingers, "
        "close-up face, portrait, nudity, person, people, man, woman, child, human figure, silhouette, crowd, hands")
 t0 = time.time()
@@ -31,7 +31,7 @@ def paint(i, g=0):
     x = alts[(k - 2) % len(alts)] if k >= 2 and alts else (1 if i in faces else 0)
     text = plain[i][x]; tries[i] = k + 1
     t = time.time()
-    im = p(prompt=text + ". " + st[i].replace("full bleed scene of: ", "") + "masterpiece", negative_prompt=NEG, num_inference_steps=STEPS,
+    im = p(prompt=st[i].split(",")[0] + " of " + text + ". " + st[i].replace("full bleed scene of: ", "") + "masterpiece", negative_prompt=NEG, num_inference_steps=STEPS,
            guidance_scale=CFG, width=W, height=H, generator=torch.Generator(f"cuda:{g}").manual_seed(it.get("seed", 7) + 100 * k)).images[0]
     face, sc = A.has_face(im), clip.score(im, text)
     print(f"ok {it['name']} try {k + 1} {time.time()-t:.0f}s clip {sc:.3f}" + (" FACE - redraw" if face else ""), flush=True)
