@@ -277,7 +277,7 @@ PIC_RULES = """You are the art director of eslarma.uz reels (Uzbek Islamic talks
 exactly what the speaker says in that phrase, in the context of the whole speech. The viewer must see the spoken words.
 - Concrete things named in the phrase are painted literally (pul -> gold coins, daraxt -> tree, uy -> house, yomg'ir -> rain, masjid -> mosque).
 - Abstract ideas become ONE clear symbolic object or place that means the same (sabr -> small sapling in dry soil, umr -> hourglass, gunoh -> dark thorns).
-- NO PEOPLE AT ALL: no man, woman, child, hands, figures, silhouettes or crowds. Show objects, nature, houses, streets, mosques, food, animals instead.
+- People are allowed like in bashar.uz reels: an Uzbek man in a green chapan and white skullcap, women and girls in long hijab, children; drawn simply, seen from behind or from the side, never a close-up face.
 - Uzbek setting: clay houses, courtyards with grape vines, blue-tiled domes, bazaars, teapots and piyola, plov, ikat fabric, Rishtan pottery.
 - Show a calm WIDE scene that contains the object (street, courtyard, room, road, landscape), like a page of an animated storybook, not a macro close-up.
 - No text, letters, books with pages, screens, crosses or churches. 8-25 English words per picture, one subject, simple.
@@ -287,7 +287,7 @@ PEOPLE = re.compile(r"\b(man|men|woman|women|person|people|boy|girl|child|childr
 
 def pic_ok(v):
     v = " ".join(str(v or "").split())
-    return 4 <= len(v.split()) <= 40 and not PEOPLE.search(v) and not any(b in v.lower() + " " for b in BANNED)
+    return 4 <= len(v.split()) <= 40 and not any(b in v.lower() + " " for b in BANNED)
 
 
 BANNED = ("paper", "banknote", "screen", "sign ", "calendar", "letter", "number", "text", "open book", "open quran", "page", "prophet", "angel",

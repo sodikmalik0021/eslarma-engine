@@ -12,7 +12,7 @@ OUT = "/kaggle/working/out"; os.makedirs(OUT, exist_ok=True)
 W, H, STEPS, CFG, BUDGET = 832, 1472, 8, 2.0, 20 * 60
 NEG = ("photo, photograph, photorealistic, realistic, 3d render, cgi, bokeh, glossy, dramatic realistic lighting, detailed shading, photographic texture, realistic wood grain, busy, cluttered, many objects, intricate ornaments, ornate patterns everywhere, repeating pattern wallpaper, tiled background, saturated colors, church, christian cross, crucifix, stained glass window, gothic cathedral, chapel, western suburban house, cemetery with crosses, "
        "text, letters, watermark, signature, logo, frame, border, blurry, lowres, jpeg artifacts, deformed hands, extra fingers, "
-       "close-up face, portrait, nudity, person, people, man, woman, child, human figure, silhouette, crowd, hands")
+       "close-up face, portrait, nudity, detailed face, eyes, mouth, nose")
 t0 = time.time()
 PIPES = []  # one painter per GPU (Kaggle gives two T4): both paint at the same time
 for d in range(max(1, torch.cuda.device_count())):
