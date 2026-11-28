@@ -496,7 +496,7 @@ def cmd_plan(src):
         plan["palette"] = settings()["palette"]
     plan["planned_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     wish = owner_wishes() + house_rules()
-    r, m = ask(f"{PICK_RULES}{wish}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
+    r, m = ask(f"{PICK_RULES}{wish}{learned_text()}\n\nSCENES\n{scenelib.catalog()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{listing}", ok_pick, 4000)
     if not r:
         raise SystemExit("planner: no model could pick scenes")  # never guess pictures
     models.add(m)
@@ -524,11 +524,23 @@ def cmd_plan(src):
     vr, _ = ask(VERIFY_RULES + "\n\n" + "\n".join(f"{i}: phrase: {ph[i]['text']} | meaning: {mean.get(i, {}).get('ru', '?')} | picture: {desc[pick[i]['scene']]}" for i in chk),
                 lambda x: isinstance(x, dict) and isinstance(x.get("checks"), list) and len(x["checks"]) >= 0.9 * len(chk), 1500) if chk else (None, None)
     bad = {int(y["i"]) for y in (vr or {}).get("checks", []) if str(y.get("i", "")).isdigit() and y.get("fits") is False}
+    vr_scenes = {i: pick[i]["scene"] for i in chk}
     for i in bad:
         pick[i]["scene"] = "none"
     doubts = [i for i in range(len(ph)) if len(ph[i]["text"].split()) >= 2 and norm(ph[i]["text"]) not in taught and (i in bad or mean.get(i, {}).get("sure", 0) < 0.7)]
     plan["doubts"] = [{"i": i, "uz": ph[i]["text"], "ru": mean.get(i, {}).get("ru", ""), "why": "картинка не подошла" if i in bad else "смысл неясен"} for i in doubts][:3]
     print(f"meaning: {len(mean)} of {len(ph)}, wrong pictures dropped: {sorted(bad)}, doubts: {len(plan['doubts'])}")
+    try:  # remember what fitted and what did not: the next reels learn from it
+        L = learn_load()
+        L.setdefault("pairs", []).extend({"ru": mean.get(i, {}).get("ru", ""), "scene": desc_scene, "ok": i not in bad, "rid": rid}
+                                         for i, desc_scene in ((i, r_scene) for i, r_scene in vr_scenes.items()) if mean.get(i, {}).get("ru"))
+        for i in bad:
+            k = mean.get(i, {}).get("ru", "")
+            if k:
+                L.setdefault("gaps", {})[k] = L["gaps"].get(k, 0) + 1
+        learn_save(L)
+    except Exception as e:
+        print("learn save failed:", str(e)[:200])
     shots, none = [], []
     shown = list(used_vis)  # paintings of the last reels and of this one
     for i, p in enumerate(ph):
@@ -846,6 +858,81 @@ def _md5_audio(p):
     return hashlib.md5(r.stdout).hexdigest()
 
 
+def learn_load():
+    """what the program learned from its own reels: data/learn.json
+    pairs: meaning -> scene that did / did not fit; gaps: meanings that had no picture; rules: its own lessons; reels: reviewed ids"""
+    try:
+        return json.load(open(os.path.join(ROOT, "data/learn.json"), encoding="utf-8"))
+    except Exception:
+        return {"pairs": [], "gaps": {}, "rules": [], "reels": []}
+
+
+def learn_save(L):
+    L["pairs"] = L.get("pairs", [])[-400:]
+    json.dump(L, open(os.path.join(ROOT, "data/learn.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def learned_text():
+    """examples and rules from past reels for the scene picker: it gets better reel after reel"""
+    L = learn_load()
+    good, bad, seen = [], [], set()
+    for x in reversed(L.get("pairs", [])):
+        k = (x.get("ru"), x.get("scene"))
+        if k in seen or not x.get("ru"):
+            continue
+        seen.add(k)
+        (good if x.get("ok") else bad).append(f'- "{x["ru"]}" -> {x["scene"]}')
+    t = ""
+    if L.get("rules"):
+        t += "\n\nYOUR OWN LESSONS FROM PAST REELS (follow them):\n" + "\n".join("- " + r for r in L["rules"][:12])
+    if good:
+        t += "\n\nMEANING -> SCENE THAT FITTED BEFORE:\n" + "\n".join(good[:25])
+    if bad:
+        t += "\n\nMEANING -> SCENE THAT DID NOT FIT (never repeat):\n" + "\n".join(bad[:20])
+    return t
+
+
+def cmd_learn(src):
+    """self-review after a reel: every 4 reels the program reads its mistakes and writes itself new rules; the owner gets a short report"""
+    rid = paths(src)[0]
+    L = learn_load()
+    if rid in L.get("reels", []):
+        return
+    L.setdefault("reels", []).append(rid)
+    L["reels"] = L["reels"][-60:]
+    learn_save(L)
+    if len(L["reels"]) % 4:
+        return
+    qa_notes = []
+    for r in L["reels"][-4:]:
+        try:
+            q = json.load(open(os.path.join(ROOT, "data/qa", f"{r}.json"), encoding="utf-8"))
+            qa_notes += [f"{r}: {v['name']}: {v['note'][:160]}" for v in q.get("items", {}).values() if not v.get("ok")]
+        except Exception:
+            pass
+    bad = [f'"{x["ru"]}" -> {x["scene"]}' for x in L.get("pairs", [])[-150:] if not x.get("ok")]
+    gaps = sorted(L.get("gaps", {}).items(), key=lambda kv: -kv[1])[:15]
+    r, _ = ask("You make Uzbek Islamic reels from a library of drawn scenes chosen by the MEANING of each phrase. Review your recent mistakes "
+               "and write yourself better rules for choosing scenes (max 10 short concrete rules in English, keep the good old ones), "
+               "and a short report for the owner in RUSSIAN (3-5 lines, simple words): what you learned and which ideas have no picture yet.\n"
+               'Return ONLY JSON {"rules": ["..."], "report_ru": "..."}.\n\n'
+               f"OLD RULES: {json.dumps(L.get('rules', []), ensure_ascii=False)}\n\nPICTURES THAT DID NOT FIT THE MEANING:\n" + "\n".join(bad[-40:]) +
+               "\n\nMEANINGS WITH NO FITTING PICTURE (count):\n" + "\n".join(f"{k} ({v})" for k, v in gaps) +
+               "\n\nQUALITY CHECK PROBLEMS:\n" + "\n".join(qa_notes[-20:]),
+               lambda x: isinstance(x, dict) and isinstance(x.get("rules"), list) and str(x.get("report_ru") or "").strip(), 1500)
+    if not r:
+        return
+    L["rules"] = [str(x)[:220] for x in r["rules"] if str(x).strip()][:10]
+    learn_save(L)
+    try:
+        import tg
+        tg.text("📈 Программа проверила себя (последние 4 ролика):\n" + str(r["report_ru"])[:1500] +
+                ("\n\nНет картинок для: " + ", ".join(k for k, _ in gaps[:6]) if gaps else ""))
+    except Exception as e:
+        print("report failed:", str(e)[:200])
+    print("learned rules:", L["rules"])
+
+
 def cmd_check(src, video):
     rid, _, ppath = paths(src)
     out = os.path.join(ROOT, "out", f"eslarma_{rid}.mp4")
@@ -892,4 +979,4 @@ def cmd_check(src, video):
 if __name__ == "__main__":
     c, src = sys.argv[1], sys.argv[2]
     video = sys.argv[3] if len(sys.argv) > 3 else os.path.join("/tmp", src)
-    {"plan": lambda: cmd_plan(src), "render": lambda: cmd_render(src, video), "check": lambda: cmd_check(src, video)}[c]()
+    {"plan": lambda: cmd_plan(src), "render": lambda: cmd_render(src, video), "check": lambda: cmd_check(src, video), "learn": lambda: cmd_learn(src)}[c]()

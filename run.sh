@@ -66,6 +66,7 @@ EOF
   save "engine: plan + QA $ID" data || true
   fresh
   python3 tools/route.py ok "$S" out/eslarma_$ID.mp4 1 >> $LOG 2>&1
+  timeout 10m python3 tools/auto_reel.py learn "$S" /tmp/$S >> $LOG 2>&1 || true  # self-review: the program learns from its own mistakes
   save "engine: route $S" data
   echo "finished; ready: $(count ready)"
 }
