@@ -266,8 +266,8 @@ Make MINIMAL corrections: spelling, capitals, punctuation, obviously misheard wo
 (o', g', sh, ch; straight apostrophe). Keep every meaning and the word order, add nothing, never paraphrase.
 Arabic quotes: correct Latin transliteration. Return ONLY JSON {"subtitles": {"0": "...", "1": "...", ...}} with every index."""
 
-PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase choose the ONE scene whose picture shows what the speaker
-MEANS at that moment, in the context of the whole speech (not just a similar word). A concrete thing that is named gets its literal scene.
+PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase choose the ONE scene whose picture shows the MEANING line
+of that phrase (what the speaker MEANS, not a single word of it) at that moment, in the context of the whole speech (not just a similar word). A concrete thing that is named gets its literal scene.
 Religious meanings: "dunyo" (as opposed to oxirat, qalb, ibodat) = worldly wealth -> money; "bu dunyoda" = in this life -> calendar_day or two_paths; never a globe.
 "yo'l" = way of life; "nur" = guidance; "qalb / dil" = inner heart; "ne'mat" = blessing; "balo" = trial or misfortune; "nafs" = desires; "rizq" = provision.
 If no scene fits, use "none". Neighbouring phrases of the same idea may share a scene, but do not use one scene more than 3 times.
@@ -288,6 +288,32 @@ PEOPLE = re.compile(r"\b(man|men|woman|women|person|people|boy|girl|child|childr
 def pic_ok(v):
     v = " ".join(str(v or "").split())
     return 4 <= len(v.split()) <= 40 and not any(b in v.lower() + " " for b in BANNED)
+
+
+MEANING_RULES = """You are an Uzbek native speaker and an Islamic scholar's editor. A reel is cut from a talk of Abdulloh domla.
+For EVERY phrase write what the speaker MEANS at that moment, inside the whole speech: the idea, not a word-by-word translation.
+Uzbek idioms and religious words carry their own meaning: "dunyo kechib yuradi" = lives only for worldly cares; "g'am" = worry/grief;
+"va'da berib xilof qiladi" = breaks his promise; "yolg'on gapiradi" = tells lies; "qarz" = debt; "nafs" = desires; "rizq" = provision;
+"qalb/dil" = inner heart; "yo'l" often = way of life; "nur" = guidance; "balo" = trial; "oxirat" = the hereafter.
+Write the meaning in RUSSIAN, 3-15 words. "sure": how sure you are that you understood the meaning (0.0-1.0); below 0.7 if the
+phrase is unclear, cut off, dialect or can be read two ways.
+Return ONLY JSON {"meanings": [{"i": 0, "meaning_ru": "...", "sure": 0.9}, ...]} for ALL phrases."""
+
+VERIFY_RULES = """You check pictures of an Uzbek Islamic reel. For every line: does the PICTURE clearly show the MEANING of the phrase,
+so that a viewer who hears the words would say "yes, that is it"? A picture of a different idea, or only of a side word, is "no".
+Return ONLY JSON {"checks": [{"i": 0, "fits": true}, ...]} for ALL lines."""
+
+
+def owner_meanings():
+    """phrases whose meaning the owner explained (bot: a reply to a question) -> {normalised uzbek phrase: russian meaning}"""
+    try:
+        return {norm(x["uz"]): x["ru"] for x in json.load(open(os.path.join(ROOT, "data/meanings.json"), encoding="utf-8")) if x.get("uz") and x.get("ru")}
+    except Exception:
+        return {}
+
+
+def norm(t):
+    return " ".join("".join(c for c in str(t).lower() if c.isalnum() or c in " '").split())
 
 
 BANNED = ("paper", "banknote", "screen", "sign ", "calendar", "letter", "number", "text", "open book", "open quran", "page", "prophet", "angel",
@@ -445,7 +471,23 @@ def cmd_plan(src):
             return {int(x["i"]) for x in s} >= set(range(len(ph))) and all(x.get("scene") in scenelib.SCENES or x.get("scene") == "none" for x in s)
         except Exception:
             return False
-    listing = "\n".join(f"{i}: {p['text']}   (word hints: {', '.join(scenelib.by_words(p['text'])[:3]) or '-'})" for i, p in enumerate(ph))
+    # 2a. the MEANING of every phrase in Uzbek context (not word by word); the owner's explanations win
+    taught = owner_meanings()
+
+    def ok_mean(x):
+        try:
+            return {int(y["i"]) for y in x["meanings"] if str(y.get("meaning_ru") or "").strip()} >= set(range(len(ph)))
+        except Exception:
+            return False
+    told = "".join(f"\n- \"{k}\" = {v}" for k, v in list(taught.items())[-40:])
+    mr, _ = ask(f"{MEANING_RULES}" + (f"\n\nTHE OWNER EXPLAINED THESE PHRASES (use exactly):{told}" if told else "") +
+                f"\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)), ok_mean, 3000)
+    mean = {int(y["i"]): {"ru": str(y["meaning_ru"]).strip(), "sure": float(y.get("sure") or 0)} for y in (mr or {}).get("meanings", []) if str(y.get("i", "")).isdigit()}
+    for i, p in enumerate(ph):
+        if norm(p["text"]) in taught:
+            mean[i] = {"ru": taught[norm(p["text"])], "sure": 1.0}
+    plan["meanings"] = [{"i": i, "uz": p["text"], "ru": mean.get(i, {}).get("ru", ""), "sure": mean.get(i, {}).get("sure", 0)} for i, p in enumerate(ph)]
+    listing = "\n".join(f"{i}: {p['text']}   || MEANING: {mean.get(i, {}).get('ru', '?')}" for i, p in enumerate(ph))
     import datetime, open_art, art_prompts
     used_pal, used_vis = recent_art(rid)
     free = [p for p in open_art.PALETTES if p not in used_pal]
@@ -476,6 +518,17 @@ def cmd_plan(src):
     def fresh():  # topic scenes that still have an unseen painting
         return [s for s in theme if any(v not in shown for v in art_prompts.ART.get(s, []))]
     pick = {int(x["i"]): x for x in r["scenes"]}
+    # 2b. a second look: does each chosen scene really show the meaning? a wrong one is dropped, never shown
+    desc = dict(l[2:].split(": ", 1) for l in scenelib.catalog().splitlines() if l.startswith("- ") and ": " in l)
+    chk = [i for i in range(len(ph)) if pick[i]["scene"] in desc]
+    vr, _ = ask(VERIFY_RULES + "\n\n" + "\n".join(f"{i}: phrase: {ph[i]['text']} | meaning: {mean.get(i, {}).get('ru', '?')} | picture: {desc[pick[i]['scene']]}" for i in chk),
+                lambda x: isinstance(x, dict) and isinstance(x.get("checks"), list) and len(x["checks"]) >= 0.9 * len(chk), 1500) if chk else (None, None)
+    bad = {int(y["i"]) for y in (vr or {}).get("checks", []) if str(y.get("i", "")).isdigit() and y.get("fits") is False}
+    for i in bad:
+        pick[i]["scene"] = "none"
+    doubts = [i for i in range(len(ph)) if len(ph[i]["text"].split()) >= 2 and norm(ph[i]["text"]) not in taught and (i in bad or mean.get(i, {}).get("sure", 0) < 0.7)]
+    plan["doubts"] = [{"i": i, "uz": ph[i]["text"], "ru": mean.get(i, {}).get("ru", ""), "why": "картинка не подошла" if i in bad else "смысл неясен"} for i in doubts][:3]
+    print(f"meaning: {len(mean)} of {len(ph)}, wrong pictures dropped: {sorted(bad)}, doubts: {len(plan['doubts'])}")
     shots, none = [], []
     shown = list(used_vis)  # paintings of the last reels and of this one
     for i, p in enumerate(ph):
@@ -488,7 +541,7 @@ def cmd_plan(src):
             shots.append({"start": 0.0 if not shots else p["start"], "says": p["text"], "scene": sc if sc in scenelib.SCENES else "question", "label": "", "visual": pics[i]})
             continue
         hits = scenelib.by_words(p["text"])
-        if hits and (sc == "none" or (m.startswith("local") and sc not in hits)):
+        if hits and sc == "none" and i not in bad and mean.get(i, {}).get("sure", 0) >= 0.7:  # a literal word only when nothing else and the meaning is clear
             sc = hits[0]
         if sc == "none":
             if len(p["text"].split()) > 4 and not p["text"].strip().endswith("?"):  # short fillers may keep the previous picture

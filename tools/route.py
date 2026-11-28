@@ -66,6 +66,13 @@ def ok(src, mp4, publish):
         set_item(src, status="downloaded", test_render=True)  # test run: nothing goes out, item stays in the queue
         return out("none")
     m = mode()
+    if plan.get("doubts"):  # the program did not fully understand some phrases: it asks the owner, nothing goes out
+        set_item(src, status="awaiting_meaning", qa_pass=bool(passed), doubts=len(plan["doubts"]), answered=0)
+        tg.text(f"🤔 Ролик {rid} «{plan.get('hook', '')}»: я не до конца понял {len(plan['doubts'])} мест(а). Ролик не выйдет, пока вы не ответите.")
+        for d in plan["doubts"]:
+            tg.text(f"❓ Ролик {rid}, фраза {d['i']}:\n«{d['uz']}»\n\nЯ понял так: {d['ru'] or '—'}\n({d['why']})\n\n"
+                    "Ответьте на ЭТО сообщение (смахните его влево) и напишите смысл своими словами. Если я понял верно — ответьте «да».")
+        return out("none")
     if m == "approve":
         set_item(src, status="awaiting_approval", qa_pass=bool(passed))
         warn = "" if passed else "\n\n⚠️ Проверка нашла проблемы — лучше отклонить."
