@@ -466,7 +466,7 @@ def cmd_plan(src):
     theme = [s for s in (th or {}).get("theme", []) if s in scenelib.SCENES]
     print("theme:", theme)
     pics, cover_pic = {}, None
-    pr, _ = ask(f"{PIC_RULES}{owner_wishes()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)),
+    pr, _ = (None, None) if settings().get("art_on") == "0" else ask(f"{PIC_RULES}{owner_wishes()}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)),
                 lambda x: isinstance(x, dict) and isinstance(x.get("pics"), list) and sum(pic_ok(y.get("pic")) for y in x["pics"] if isinstance(y, dict)) >= 0.8 * len(ph), 4000)
     if pr:
         pics = {int(y["i"]): " ".join(y["pic"].split()) for y in pr["pics"] if isinstance(y, dict) and str(y.get("i", "")).isdigit() and pic_ok(y.get("pic"))}
@@ -561,7 +561,7 @@ CAMS_NEXT = {"push": "left", "left": "pull", "pull": "right", "right": "push"}
 
 def paint(plan, shots, rid):
     """paint every distinct visual with the open model (own process, so its memory is freed); {visual: jpg path}"""
-    if os.environ.get("OPEN_ART", "1") != "1":
+    if os.environ.get("OPEN_ART", "1") != "1" or settings().get("art_on") == "0":  # art_on=0: the drawn vector scenes, like reel 0018
         return {}
     vis = list(dict.fromkeys([s["visual"] for s in shots if s.get("visual")] + ([plan["cover_visual"]] if plan.get("cover_visual") else [])))
     if not vis:

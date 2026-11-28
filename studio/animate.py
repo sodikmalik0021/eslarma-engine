@@ -51,7 +51,7 @@ def chunk_words(words, keywords):
         nxt = words[i + 1] if i + 1 < len(words) else None
         end_punct = w["w"].endswith((".", ",", "?", "!", ":", ";", "»"))
         gap = nxt and nxt["s"] - w["e"] > 0.35
-        if len(cur) >= 6 or end_punct or gap or nxt is None or (len(cur) >= 2 and len(" ".join(x["w"] for x in cur)) > 34):  # up to 2 lines, like bashar.uz
+        if len(cur) >= 3 or end_punct or gap or nxt is None or (len(cur) >= 2 and len(" ".join(x["w"] for x in cur)) > 18):
             chunks.append({"words": cur, "s": cur[0]["s"], "e": cur[-1]["e"]})
             cur = []
     for i, c in enumerate(chunks):  # hold until next chunk, max +0.6s
@@ -66,62 +66,39 @@ def font(sz):
 
 SET = {}  # the owner's settings: sub_size, sub_y, sub_color, title_size
 
-BOLD = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
-_bold = {}
-
-
-def bold(sz):
-    if sz not in _bold:
-        try:
-            _bold[sz] = ImageFont.truetype(BOLD, sz)
-        except Exception:
-            _bold[sz] = font(sz)
-    return _bold[sz]
-
-
 def draw_subtitle(frame, chunk, t, keywords, handle):
-    """bashar.uz look: big bold dark green words on a soft white glow, up to 2 centred lines;
-    a spoken word is dark (keyword gold), the coming words already show in pale green"""
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    f = bold(int(SET.get("sub_size", 54)))
+    f = font(int(SET.get("sub_size", 40)))
     y = int(H * float(SET.get("sub_y", 0.775)))
-    lh = int(f.size * 1.3)
     if chunk:
         fade_in = min(1, (t - chunk["s"]) / 0.18)
         fade_out = min(1, (chunk["e"] - t) / 0.15)
         a = max(0, min(fade_in, fade_out))
-        lines, cur = [], []
-        for w in chunk["words"]:
-            if cur and f.getlength(" ".join(x["w"] for x in cur + [w])) > 860:
-                lines.append(cur); cur = []
-            cur.append(w)
-        lines.append(cur)
-        widths = [f.getlength(" ".join(x["w"] for x in l)) for l in lines]
-        top = y - lh * (len(lines) - 1) // 2
-        glow = Image.new("L", (W, H), 0)
-        gd = ImageDraw.Draw(glow)
-        bw = max(widths) + 120
-        gd.rounded_rectangle([W / 2 - bw / 2, top - lh // 2 - 18, W / 2 + bw / 2, top + lh * (len(lines) - 1) + lh // 2 + 18], radius=lh // 2 + 18, fill=int(225 * a))
-        glow = glow.filter(ImageFilter.GaussianBlur(26))
-        img = Image.composite(Image.new("RGB", (W, H), (250, 248, 242)), img, glow)
+        tokens = [w["w"] for w in chunk["words"]]
+        text = " ".join(tokens)
+        tw = f.getlength(text)
+        padx, ph = 44, 74
+        bw = max(tw + 2 * padx, 420)
+        x0 = int(W / 2 - bw / 2)
+        # soft white glow pill
+        pill = Image.new("L", (W, H), 0)
+        ImageDraw.Draw(pill).rounded_rectangle([x0, y - ph // 2, x0 + bw, y + ph // 2], radius=ph // 2, fill=int(215 * a))
+        pill = pill.filter(ImageFilter.GaussianBlur(14))
+        white = Image.new("RGB", (W, H), (250, 248, 242))
+        img = Image.composite(white, img, pill)
         d = ImageDraw.Draw(img)
-        dark = tuple(int(SET["sub_color"][i:i + 2], 16) for i in (1, 3, 5)) if SET.get("sub_color") else (10, 70, 48)
-        pale = (125, 150, 135)
-        for li, l in enumerate(lines):
-            cx, ly = W / 2 - widths[li] / 2, top + li * lh
-            for w in l:
-                spoken = t >= w["s"] - 0.03
-                key = w["w"].strip(".,!?:;«»\"'").lower() in keywords
-                col = ((196, 146, 52) if key else dark) if spoken else pale
-                base = np.array(img.getpixel((min(W - 1, int(cx)), ly)))
-                c = tuple(int(base[k] + (col[k] - base[k]) * a) for k in range(3))
-                d.text((cx, ly), w["w"], font=f, fill=c, anchor="lm")
-                cx += f.getlength(w["w"] + " ")
-        hy = top + lh * (len(lines) - 1) + lh // 2 + 40
-    else:
-        hy = y + 72
+        cx = W / 2 - tw / 2
+        for w in chunk["words"]:
+            spoken = t >= w["s"] - 0.03
+            key = w["w"].strip(".,!?:;«»\"'").lower() in keywords
+            col = GOLD if key and spoken else tuple(int(SET["sub_color"][i:i + 2], 16) for i in (1, 3, 5)) if SET.get("sub_color") else GREEN
+            alpha = a if spoken else 0.0  # words appear one by one, in sync with speech
+            base = np.array(img.getpixel((int(cx), y)))
+            c = tuple(int(base[k] + (col[k] - base[k]) * alpha) for k in range(3))
+            d.text((cx, y), w["w"], font=f, fill=c, anchor="lm")
+            cx += f.getlength(w["w"] + " ")
     d = ImageDraw.Draw(img)
-    d.text((W / 2, hy), handle, font=font(28), fill=(40, 80, 60), anchor="mm")
+    d.text((W / 2, y + 72), handle, font=font(26), fill=(70, 96, 80), anchor="mm")
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 HOOK_FONT = "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf"
