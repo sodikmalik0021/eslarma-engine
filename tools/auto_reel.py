@@ -28,9 +28,9 @@ ABSOLUTE RULES
 6. "text" (on-screen words) only for numbers or a key word, max 3 words. Usually empty.
 7. Subtitles: rewrite every transcript segment into correct Uzbek LATIN (o', g', sh, ch, ng; Arabic phrases transliterated
    in Latin), same meaning and word order as spoken, no additions. Keep segment indexes.
-8. hook: max 7 words, a question or surprising claim that makes people stay (Uzbek). cta: "Obuna bo'ling — har kuni eslatma".
-9. caption: hook line + 2 short summary lines + a question to the audience + "\\n\\n🎙 @abdulloh.domla\\n\\n📌 Buni ... do'stingizga yuboring."
-   (concrete person to send it to) + 5–8 hashtags incl #islom #eslatma #abdullohdomla #eslarma. comment: warm Uzbek dua/question, <=200 chars.
+8. hook: max 7 words, a question or surprising claim that makes people stay (Uzbek). cta: "".
+9. caption: hook line + 2 short summary lines + "\\n\\n🎙 @abdulloh.domla" + 5–8 hashtags incl #islom #eslatma #abdullohdomla #eslarma.
+   No begging: no questions to the audience, no "subscribe / comment / send". comment: one short sincere Uzbek dua, <=200 chars.
 
 Return ONLY JSON:
 {"hook": str, "cta": str, "caption": str, "comment": str, "metaphor": str,
@@ -182,10 +182,9 @@ def fallback_plan(t):
         full.insert(0, dict(full[0] if full else DEFAULTS[0], start=0.0))
     first = t["segments"][0]["text"].strip()
     hook = " ".join(first.split()[:6]).rstrip(",.") + "?"
-    cap = (f"{hook}\n\n{first}\n\nSiz bu haqda nima deysiz? 👇\n\n🎙 @abdulloh.domla\n\n"
-           "📌 Buni yaqin do'stingizga yuboring.\n\n#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon")
-    return {"hook": hook, "cta": "Obuna bo'ling — har kuni eslatma", "caption": cap,
-            "comment": "Alloh barchamizga amal qilishni nasib etsin. Omin deb qoldiring 🤲", "subtitles": {}, "shots": full, "fallback": True}
+    cap = f"{hook}\n\n{first}\n\n🎙 @abdulloh.domla\n\n#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon"
+    return {"hook": hook, "cta": "", "caption": cap,
+            "comment": DUA, "subtitles": {}, "shots": full, "fallback": True}
 
 
 def paths(src):
@@ -214,9 +213,9 @@ Abdulloh domla. Read the speech (whisper transcript, may contain errors and dial
 {"topic": one lowercase word (e.g. tarbiya, shukr, baraka, nikoh, sabr, rizq, namoz),
  "metaphor": ONE simple visual world that carries the whole reel (e.g. "a garden where a small sapling grows" = patience),
  "hook": max 6 words, Uzbek Latin, a question or surprising claim from the strongest idea,
- "cta": "Obuna bo'ling — har kuni eslatma",
- "caption": hook line + 2 short summary lines + a question to the audience + "\\n\\n🎙 @abdulloh.domla\\n\\n📌 Buni ... do'stingizga yuboring." (a concrete person) + 5-8 hashtags incl #islom #eslatma #abdullohdomla #eslarma,
- "comment": a warm Uzbek dua or question, max 200 chars}
+ "caption": hook line + 2 short summary lines of what the speaker said + "\\n\\n🎙 @abdulloh.domla" + 5-8 hashtags incl #islom #eslatma #abdullohdomla #eslarma.
+   NO questions to the audience, NO "subscribe", "write in the comments", "send to a friend", no 👇 — calm and dignified,
+ "comment": one short sincere Uzbek dua on the topic, max 200 chars, no requests to the viewers}
 All text in correct Uzbek LATIN (o', g', sh, ch). Never invent facts the speaker did not say."""
 
 CHUNK_RULES = """You are the director of eslarma.uz reels (2.5D watercolor storybook animation over the speaker's original audio).
@@ -392,16 +391,39 @@ def hook_lines(subs):
     return out
 
 
-ASK_LINES = ["Siz bu haqda nima deysiz? 👇", "Sizga qaysi gap ta'sir qildi? 👇", "Fikringizni izohda yozing 👇"]
-SEND_LINES = ["📌 Buni yaqiningizga yuboring.", "📌 Buni do'stingizga yuboring.", "📌 Buni oilangizga yuboring."]
-NOTE_LINES = ["Eng ko'p ta'sir qilgan gapni izohda yozing 👇", "Davomini xohlaysizmi? Izohda yozing 👇", "Yaqinlaringizga ham yuboring 🤍"]
+# The owner's rule (2026-11-28): no begging. No "subscribe", "write in the comments", "send it to a friend", no 👇.
+# Caption = the speaker's words + source + hashtags; comment = a short sincere dua on the topic.
+DUAS = {"qarz": "Alloh barchamizni qarzdan va uning g'amidan O'z panohida asrasin.", "sabr": "Alloh barchamizga sabr va xotirjamlik ato etsin.",
+        "shukr": "Alloh barchamizni ne'matlariga shukr qiluvchi bandalaridan qilsin.", "rizq": "Alloh barchamizga halol va pokiza rizq nasib etsin.",
+        "tarbiya": "Alloh barchamizga farzandlarimizni solih qilib tarbiyalashni nasib etsin.", "namoz": "Alloh namozlarimizni qabul qilsin.",
+        "nikoh": "Alloh oilalarimizga baraka va totuvlik bersin.", "oila": "Alloh oilalarimizga baraka va totuvlik bersin.",
+        "ilm": "Alloh barchamizga foydali ilm nasib etsin.", "tavba": "Alloh barchamizning tavbalarimizni qabul qilsin.",
+        "baraka": "Alloh hayotimizga baraka bersin.", "ota-ona": "Alloh ota-onalarimizdan rozi bo'lsin."}
+DUA = "Alloh barchamizga eshitganimizga amal qilishni nasib etsin."
+BEG = ("yuboring", "izoh", "obuna", "👇", "fikringiz", "nima deysiz", "ta'sir qildi", "davomini", "yozing", "layk", "saqlab qo'ying")
+
+
+def calm_texts(plan):
+    """caption without begging lines; the comment is a dua on the reel's topic"""
+    keep = [l for l in str(plan.get("caption") or "").split("\n") if not any(b in l.lower() for b in BEG)]
+    cap = "\n".join(keep)
+    while "\n\n\n" in cap:
+        cap = cap.replace("\n\n\n", "\n\n")
+    if "@abdulloh.domla" not in cap:
+        cap = cap.rstrip() + "\n\n🎙 @abdulloh.domla"
+    if "#eslarma" not in cap:
+        cap = cap.rstrip() + "\n\n" + (settings().get("hashtags") or "#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon")
+    topic = str(plan.get("topic") or "").lower()
+    plan["caption"] = cap.strip()
+    plan["comment"] = next((v for k, v in DUAS.items() if topic.startswith(k) or k in topic), DUA)
+    plan["cta"] = ""
+    return plan
 
 
 def safe_texts(hook, rid):
     """caption and comment from fixed, correct Uzbek phrases around a title that the speaker said himself"""
-    k = int(hashlib.md5(rid.encode()).hexdigest(), 16) % 3
-    cap = f"{hook}\n\n{ASK_LINES[k]}\n\n🎙 @abdulloh.domla\n\n{SEND_LINES[k]}\n\n{settings().get('hashtags') or '#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon'}"
-    return {"hook": hook, "caption": cap, "comment": NOTE_LINES[k]}
+    cap = f"{hook}\n\n🎙 @abdulloh.domla\n\n{settings().get('hashtags') or '#islom #eslatma #abdullohdomla #eslarma #nasihat #iymon'}"
+    return {"hook": hook, "caption": cap, "comment": DUA}
 
 
 def cmd_plan(src):
@@ -460,7 +482,8 @@ def cmd_plan(src):
         if not hk:
             raise SystemExit("planner: no line of the speech fits as a title")
         plan.update(safe_texts(lines[int(hk["i"])], rid))
-    plan["hook"], plan["cta"], plan["subtitles"] = uz_latin(plan["hook"]), "Obuna bo'ling — har kuni eslatma", subs
+    plan["hook"], plan["cta"], plan["subtitles"] = uz_latin(plan["hook"]), "", subs
+    calm_texts(plan)
 
     # 2. one library scene per phrase
     ph = phrases_of(tpath, subs)
@@ -845,7 +868,7 @@ def cmd_render(src, video):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     st = settings()
     rplan = {"settings": st, "duration": dur, "scenes": built, "words": build_words2(tpath, fixed), "keywords": [],
-             "hook": "" if st.get("title_on") == "0" else plan.get("hook", ""), "cta": st.get("cta") or plan.get("cta", "Obuna bo'ling — har kuni eslatma"), "handle": "eslarma.uz",
+             "hook": "" if st.get("title_on") == "0" else plan.get("hook", ""), "cta": "", "handle": "eslarma.uz",
              "source": video, "video_only": f"/tmp/v_only{rid}.mp4", "output": out}
     rp = os.path.join(ROOT, "studio", f"plan_auto_{rid}.json")
     json.dump(rplan, open(rp, "w"), ensure_ascii=False, indent=1)
