@@ -269,6 +269,8 @@ PICK_RULES = """You are the art director of eslarma.uz reels. For every phrase c
 of that phrase (what the speaker MEANS, not a single word of it) at that moment, in the context of the whole speech (not just a similar word). A concrete thing that is named gets its literal scene.
 Religious meanings: "dunyo" (as opposed to oxirat, qalb, ibodat) = worldly wealth -> money; "bu dunyoda" = in this life -> calendar_day or two_paths; never a globe.
 "yo'l" = way of life; "nur" = guidance; "qalb / dil" = inner heart; "ne'mat" = blessing; "balo" = trial or misfortune; "nafs" = desires; "rizq" = provision.
+A phrase whose ROLE is a quoted wrong view or irony must never be shown as if it were true: show the mistake as a mistake
+(the wrong road, thorns, a question, the person going the wrong way) or the speaker's correction. A hint is shown by what it points to.
 If no scene fits, use "none". Neighbouring phrases of the same idea may share a scene, but do not use one scene more than 3 times.
 Scenes with a child or family only when the speech is about children or family. "label": "".
 Return ONLY JSON {"scenes": [{"i": 0, "scene": "name", "label": ""}, ...]} for ALL phrases."""
@@ -289,11 +291,29 @@ def pic_ok(v):
     return 4 <= len(v.split()) <= 40 and not any(b in v.lower() + " " for b in BANNED)
 
 
+STORY_RULES = """Listen to this Uzbek Islamic talk like an experienced human listener who knows Uzbek, its dialects and how a domla speaks.
+First understand the WHOLE talk, then each part of it. A speaker often:
+- QUOTES a wrong view of ignorant people (johil odamlar) in order to refute it. Example: "Berilgan narsa yaxshi, berilmagani yomon" said
+  as "this is how ignorant people think" — the speaker does NOT agree; his own point is the opposite.
+- asks a RHETORICAL question (he does not wait for an answer), uses IRONY (says the opposite of what he means), uses a HINT or a proverb
+  (the literal words point to a different idea), tells an EXAMPLE or a short STORY, gives a hadith / ayah, ends with a DUA.
+Return ONLY JSON {"main_idea_ru": "the one main idea of the talk, Russian",
+ "parts": [{"from": first phrase index, "to": last phrase index,
+            "role": "own_view | quoted_wrong_view | quoted_right_view | rhetorical_question | irony | hint | example | story | hadith_or_ayah | dua",
+            "point_ru": "what the speaker wants the listener to understand with this part, Russian"}]} covering ALL phrases."""
+ROLE_RU = {"own_view": "the speaker's own view", "quoted_wrong_view": "a WRONG view of others that the speaker quotes in order to refute it",
+           "quoted_right_view": "a quoted right view", "rhetorical_question": "a rhetorical question", "irony": "irony: he means the opposite",
+           "hint": "a hint: the words point to another idea", "example": "an example", "story": "a short story", "hadith_or_ayah": "a hadith or ayah",
+           "dua": "a dua"}
+
+
 MEANING_RULES = """You are an Uzbek native speaker and an Islamic scholar's editor. A reel is cut from a talk of Abdulloh domla.
 For EVERY phrase write what the speaker MEANS at that moment, inside the whole speech: the idea, not a word-by-word translation.
 Uzbek idioms and religious words carry their own meaning: "dunyo kechib yuradi" = lives only for worldly cares; "g'am" = worry/grief;
 "va'da berib xilof qiladi" = breaks his promise; "yolg'on gapiradi" = tells lies; "qarz" = debt; "nafs" = desires; "rizq" = provision;
 "qalb/dil" = inner heart; "yo'l" often = way of life; "nur" = guidance; "balo" = trial; "oxirat" = the hereafter.
+Use the SPEECH ANALYSIS: if a phrase is a quoted wrong view, irony or a hint, write what the SPEAKER means by it
+(e.g. "так думают невежды: ..., а это неправильно"), never the literal words as if they were his opinion.
 Write the meaning in RUSSIAN, 3-15 words. "sure": how sure you are that you understood the meaning (0.0-1.0); below 0.7 if the
 phrase is unclear, cut off, dialect or can be read two ways.
 Return ONLY JSON {"meanings": [{"i": 0, "meaning_ru": "...", "sure": 0.9}, ...]} for ALL phrases."""
@@ -503,8 +523,23 @@ def cmd_plan(src):
         except Exception:
             return False
     told = "".join(f"\n- \"{k}\" = {v}" for k, v in list(taught.items())[-40:])
-    mr, _ = ask(f"{MEANING_RULES}" + (f"\n\nTHE OWNER EXPLAINED THESE PHRASES (use exactly):{told}" if told else "") +
-                f"\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)), ok_mean, 3000)
+    # 2a-0. understand the whole talk first, like a human listener: main idea, who says what, quotes / irony / hints
+    numbered = "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph))
+    an, _ = ask(f"{STORY_RULES}\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{numbered}",
+                lambda x: isinstance(x, dict) and str(x.get("main_idea_ru") or "").strip() and isinstance(x.get("parts"), list) and x["parts"], 2500)
+    role = {}
+    for part in (an or {}).get("parts", []):
+        try:
+            for k in range(int(part["from"]), int(part["to"]) + 1):
+                role[k] = {"role": str(part.get("role") or "own_view"), "point": str(part.get("point_ru") or "")}
+        except Exception:
+            pass
+    plan["analysis"] = an or {}
+    print("main idea:", (an or {}).get("main_idea_ru"), "| roles:", sorted({r["role"] for r in role.values()}))
+    story = ("\n\nSPEECH ANALYSIS:\nmain idea: " + str(an.get("main_idea_ru")) + "\n" +
+             "\n".join(f"phrases {x.get('from')}-{x.get('to')}: {ROLE_RU.get(x.get('role'), x.get('role'))} — {x.get('point_ru')}" for x in an["parts"])) if an else ""
+    mr, _ = ask(f"{MEANING_RULES}" + (f"\n\nTHE OWNER COMMENTED ON THESE PHRASES (spoken notes, take their idea into account):{told}" if told else "") + story +
+                f"\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n{numbered}", ok_mean, 3000)
     mean = {int(y["i"]): {"ru": str(y["meaning_ru"]).strip(), "sure": float(y.get("sure") or 0)} for y in (mr or {}).get("meanings", []) if str(y.get("i", "")).isdigit()}
     # self-check instead of asking the owner: unclear phrases are thought over once more, with the whole speech around them
     unsure = [i for i in range(len(ph)) if mean.get(i, {}).get("sure", 0) < 0.7 and norm(ph[i]["text"]) not in taught]
@@ -518,11 +553,13 @@ def cmd_plan(src):
             if k in unsure and str(y.get("meaning_ru") or "").strip() and float(y.get("sure") or 0) >= mean.get(k, {}).get("sure", 0):
                 mean[k] = {"ru": str(y["meaning_ru"]).strip(), "sure": float(y.get("sure") or 0)}
         print(f"rethought {len(unsure)} unclear phrases, still unclear: {sum(mean.get(i, {}).get('sure', 0) < 0.7 for i in unsure)}")
-    for i, p in enumerate(ph):
-        if norm(p["text"]) in taught:
-            mean[i] = {"ru": taught[norm(p["text"])], "sure": 1.0}
+    for i, p in enumerate(ph):  # the owner's spoken note makes the phrase clear; his words stay a hint for the model, not the text itself
+        if norm(p["text"]) in taught and i in mean:
+            mean[i]["sure"] = max(mean[i]["sure"], 0.9)
     plan["meanings"] = [{"i": i, "uz": p["text"], "ru": mean.get(i, {}).get("ru", ""), "sure": mean.get(i, {}).get("sure", 0)} for i, p in enumerate(ph)]
-    listing = "\n".join(f"{i}: {p['text']}   || MEANING: {mean.get(i, {}).get('ru', '?')}" for i, p in enumerate(ph))
+    listing = "\n".join(f"{i}: {p['text']}   || MEANING: {mean.get(i, {}).get('ru', '?')}"
+                         + (f"   || ROLE: {ROLE_RU.get(role[i]['role'], role[i]['role'])}" if role.get(i, {}).get("role", "own_view") != "own_view" else "")
+                         for i, p in enumerate(ph))
     import datetime, open_art, art_prompts
     used_pal, used_vis = recent_art(rid)
     free = [p for p in open_art.PALETTES if p not in used_pal]
