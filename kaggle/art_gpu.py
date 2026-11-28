@@ -68,6 +68,8 @@ import numpy as np
 del PIPES; gc.collect(); torch.cuda.empty_cache()
 VB = 150 * 60  # whole kernel budget incl. paintings
 try:
+    if not any(it.get("motion") for it in ITEMS):  # moving clips are off: sharp paintings only
+        raise SystemExit("motion off")
     from diffusers import LTXConditionPipeline, LTXVideoTransformer3DModel
     from diffusers.pipelines.ltx.pipeline_ltx_condition import LTXVideoCondition
     REPO = "Lightricks/LTX-Video-0.9.7-distilled"
@@ -108,6 +110,6 @@ try:
         for f in best:
             pr.stdin.write(f.tobytes())
         pr.stdin.close(); pr.wait()
-except Exception as e:
+except (Exception, SystemExit) as e:
     import traceback; traceback.print_exc()
 print(f"all done in {time.time()-t0:.0f}s, clips: {len([f for f in os.listdir(OUT) if f.endswith('.mp4')])}", flush=True)
