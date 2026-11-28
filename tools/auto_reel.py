@@ -506,6 +506,18 @@ def cmd_plan(src):
     mr, _ = ask(f"{MEANING_RULES}" + (f"\n\nTHE OWNER EXPLAINED THESE PHRASES (use exactly):{told}" if told else "") +
                 f"\n\nWHOLE SPEECH: {speech}\n\nPHRASES:\n" + "\n".join(f"{i}: {p['text']}" for i, p in enumerate(ph)), ok_mean, 3000)
     mean = {int(y["i"]): {"ru": str(y["meaning_ru"]).strip(), "sure": float(y.get("sure") or 0)} for y in (mr or {}).get("meanings", []) if str(y.get("i", "")).isdigit()}
+    # self-check instead of asking the owner: unclear phrases are thought over once more, with the whole speech around them
+    unsure = [i for i in range(len(ph)) if mean.get(i, {}).get("sure", 0) < 0.7 and norm(ph[i]["text"]) not in taught]
+    if unsure:
+        ctx = "\n".join(f"{i}: {p['text']}" + ("   <-- RETHINK" if i in unsure else f"   (= {mean.get(i, {}).get('ru', '')})") for i, p in enumerate(ph))
+        rr, _ = ask(f"{MEANING_RULES}\n\nThink again about the lines marked RETHINK: read the lines before and after them, the speaker continues one thought. "
+                    "Give your best understanding of what he means there.\n\nWHOLE SPEECH: " + speech + "\n\nPHRASES:\n" + ctx,
+                    lambda x: isinstance(x, dict) and isinstance(x.get("meanings"), list), 2000)
+        for y in (rr or {}).get("meanings", []):
+            k = int(y["i"]) if str(y.get("i", "")).isdigit() else -1
+            if k in unsure and str(y.get("meaning_ru") or "").strip() and float(y.get("sure") or 0) >= mean.get(k, {}).get("sure", 0):
+                mean[k] = {"ru": str(y["meaning_ru"]).strip(), "sure": float(y.get("sure") or 0)}
+        print(f"rethought {len(unsure)} unclear phrases, still unclear: {sum(mean.get(i, {}).get('sure', 0) < 0.7 for i in unsure)}")
     for i, p in enumerate(ph):
         if norm(p["text"]) in taught:
             mean[i] = {"ru": taught[norm(p["text"])], "sure": 1.0}
@@ -551,7 +563,10 @@ def cmd_plan(src):
     for i in bad:
         pick[i]["scene"] = "none"
     doubts = [i for i in range(len(ph)) if len(ph[i]["text"].split()) >= 2 and norm(ph[i]["text"]) not in taught and (i in bad or mean.get(i, {}).get("sure", 0) < 0.7)]
-    plan["doubts"] = [{"i": i, "uz": ph[i]["text"], "ru": mean.get(i, {}).get("ru", ""), "why": "картинка не подошла" if i in bad else "смысл неясен"} for i in doubts][:3]
+    plan["unclear"] = [{"i": i, "uz": ph[i]["text"], "ru": mean.get(i, {}).get("ru", ""), "why": "no fitting picture" if i in bad else "meaning unclear"} for i in doubts]
+    # the owner is NOT asked (his wish 2026-11-28): a phrase without a fitting picture keeps the previous / topic picture,
+    # the gap is remembered in data/learn.json and reported every 4 reels. Questions only if settings ask_owner = 1.
+    plan["doubts"] = [d for d in plan["unclear"] if d["why"] == "meaning unclear"][:1] if settings().get("ask_owner") == "1" else []
     print(f"meaning: {len(mean)} of {len(ph)}, wrong pictures dropped: {sorted(bad)}, doubts: {len(plan['doubts'])}")
     try:  # remember what fitted and what did not: the next reels learn from it
         L = learn_load()
