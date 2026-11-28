@@ -82,7 +82,7 @@ def draw_subtitle(frame, chunk, t, keywords, handle):
         x0 = int(W / 2 - bw / 2)
         # soft white glow pill
         pill = Image.new("L", (W, H), 0)
-        ImageDraw.Draw(pill).rounded_rectangle([x0, y - ph // 2, x0 + bw, y + ph // 2], radius=ph // 2, fill=int(215 * a))
+        ImageDraw.Draw(pill).rounded_rectangle([x0, y - ph // 2, x0 + bw, y + ph // 2], radius=ph // 2, fill=int((242 if brand_on() else 215) * a))
         pill = pill.filter(ImageFilter.GaussianBlur(14))
         white = Image.new("RGB", (W, H), (250, 248, 242))
         img = Image.composite(white, img, pill)
@@ -102,6 +102,47 @@ def draw_subtitle(frame, chunk, t, keywords, handle):
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 HOOK_FONT = "/usr/share/fonts/opentype/inter/Inter-ExtraBold.otf"
+
+# ---------- brand look (settings brand=1): our palette, brand title/subtitles, end card with the logo ----------
+DARK, MINT, ACC = (11, 46, 34), (60, 203, 143), (18, 163, 111)
+_lut, _endcard = None, None
+
+
+def brand_on():
+    return SET.get("brand") == "1"
+
+
+def brand_grade(fr, k=0.38):
+    """the scene keeps its drawing, its colours lean to ours: dark green shadows, green middle, mint-white lights"""
+    global _lut
+    if _lut is None:
+        g = np.arange(256) / 255.0
+        stops = [(0.0, (34, 46, 11)), (0.55, (111, 163, 18)), (1.0, (247, 251, 243))]  # BGR #0B2E22 #12A36F #F3FBF7
+        lut = np.zeros((256, 3))
+        for (a, ca), (b, cb) in zip(stops, stops[1:]):
+            m = (g >= a) & (g <= b)
+            t = ((g[m] - a) / (b - a))[:, None]
+            lut[m] = np.array(ca) * (1 - t) + np.array(cb) * t
+        _lut = [lut[:, c].astype(np.uint8) for c in range(3)]
+    g = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
+    col = cv2.merge([cv2.LUT(g, _lut[c]) for c in range(3)])
+    return cv2.addWeighted(fr, 1 - k, col, k, 0)
+
+
+def endcard():
+    global _endcard
+    if _endcard is None:
+        import os
+        img = Image.new("RGB", (W, H), DARK)
+        lp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
+        logo = Image.open(lp).convert("RGBA").resize((300, 300), Image.LANCZOS)
+        m = Image.new("L", (300, 300), 0); ImageDraw.Draw(m).rounded_rectangle([0, 0, 299, 299], radius=70, fill=255)
+        img.paste(logo, (W // 2 - 150, H // 2 - 330), m)
+        d = ImageDraw.Draw(img)
+        d.text((W / 2, H / 2 + 60), "eslarma.uz", font=ImageFont.truetype(HOOK_FONT.replace("ExtraBold", "Bold"), 80), fill=(255, 255, 255), anchor="mm")
+        d.text((W / 2, H / 2 + 150), "Har kuni bir eslatma", font=ImageFont.truetype(FONT.replace("SemiBold", "Regular"), 40), fill=(170, 190, 180), anchor="mm")
+        _endcard = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR).astype(np.float32)
+    return _endcard
 
 def wrap(text, f, maxw):
     lines, cur = [], ""
@@ -126,10 +167,12 @@ def draw_overlay(frame, t, dur, hook, cta):
         lines = wrap(hook, f, W * 0.8)
         lh = int(int(SET.get("title_size", 84)) * 1.19 * pop); y0 = int(H * 0.30 - lh * len(lines) / 2)
         bw = max(f.getlength(l) for l in lines) + 90
-        d.rounded_rectangle([W / 2 - bw / 2, y0 - 40, W / 2 + bw / 2, y0 + lh * len(lines) + 30], radius=40, fill=(250, 246, 236, int(225 * a)))
+        box, ink, bar = ((11, 46, 34, int(238 * a)), (255, 255, 255, int(255 * a)), (60, 203, 143, int(255 * a))) if brand_on() else \
+            ((250, 246, 236, int(225 * a)), (31, 61, 43, int(255 * a)), (196, 146, 52, int(255 * a)))
+        d.rounded_rectangle([W / 2 - bw / 2, y0 - 40, W / 2 + bw / 2, y0 + lh * len(lines) + 30], radius=40, fill=box)
         for i, l in enumerate(lines):
-            d.text((W / 2, y0 + i * lh + lh / 2), l, font=f, fill=(31, 61, 43, int(255 * a)), anchor="mm")
-        d.rounded_rectangle([W / 2 - 60, y0 + lh * len(lines) + 4, W / 2 + 60, y0 + lh * len(lines) + 12], radius=4, fill=(196, 146, 52, int(255 * a)))
+            d.text((W / 2, y0 + i * lh + lh / 2), l, font=f, fill=ink, anchor="mm")
+        d.rounded_rectangle([W / 2 - 60, y0 + lh * len(lines) + 4, W / 2 + 60, y0 + lh * len(lines) + 12], radius=4, fill=bar)
     if show_cta:
         a = min(1, (t - (dur - 3.0)) / 0.4)
         f = ImageFont.truetype(HOOK_FONT, 44)
@@ -178,6 +221,9 @@ def main(plan_path):
     plan = json.load(open(plan_path))
     dur = plan["duration"]
     SET.update(plan.get("settings") or {})
+    if brand_on():  # subtitle words in our colours: dark green text, green key word
+        global GREEN, GOLD
+        GREEN, GOLD = DARK, ACC
     scenes = plan["scenes"]
     imgs = []
     for s in scenes:
@@ -239,9 +285,14 @@ def main(plan_path):
             a = ease((t - s["start"]) / XF)
             fr = prev * (1 - a) + fr * a
         fr = np.clip(fr * tex * vig, 0, 255).astype(np.uint8)
+        if brand_on():
+            fr = brand_grade(fr)
         ch = next((c for c in chunks if c["s"] - 0.05 <= t <= c["e"]), None)
         fr = draw_subtitle(fr, ch, t, keywords, plan["handle"])
         fr = draw_overlay(fr, t, dur, plan.get("hook"), plan.get("cta"))
+        if brand_on() and t > dur - 0.9:  # the last moment: our logo
+            a = ease((t - (dur - 0.9)) / 0.3)
+            fr = np.clip(fr * (1 - a) + endcard() * a, 0, 255).astype(np.uint8)
         enc.stdin.write(fr.tobytes())
     enc.stdin.close(); enc.wait()
     # mux: original audio stream copied bit-for-bit

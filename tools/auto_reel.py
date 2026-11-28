@@ -790,6 +790,66 @@ def art_style():
         return "uzbek"
 
 
+def brand_covers(plan, rid, video_only, shots, dur):
+    """two covers in our style for the profile grid: white and dark green; the publisher picks the one the grid pattern needs.
+    The scene is a frame of the reel itself (its subtitle band removed), graded to our palette."""
+    import cv2, numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+    cand = [s for s in shots if float(s["start"]) > 3 and s.get("scene") not in ("question", None)] or shots
+    hw = [w.strip(".,!?").lower() for w in plan["hook"].split()][:3]  # the scene shown while the title line is spoken fits the cover best
+    said = [s for s in cand if all(w in s.get("says", "").lower() for w in hw)]
+    pick = said[0] if said else (cand[len(cand) // 3] if cand else None)
+    t = float(pick["start"]) + 0.8 if pick else dur / 2
+    cap = cv2.VideoCapture(video_only); cap.set(cv2.CAP_PROP_POS_MSEC, min(t, dur - 1.5) * 1000)
+    ok, fr = cap.read()
+    if not ok:
+        return
+    m = np.zeros(fr.shape[:2], np.uint8); m[1400:1610, 100:980] = 255
+    fr = cv2.inpaint(fr, m, 9, cv2.INPAINT_TELEA)
+    sys.path.insert(0, os.path.join(ROOT, "studio"))
+    import animate
+    animate.SET["brand"] = "1"
+    fr = animate.brand_grade(fr)
+    pic = Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)).crop((0, 180, 1080, 1180)).resize((900, 833))
+    I = "/usr/share/fonts/opentype/inter/Inter-"
+    words = plan["hook"].split()
+    key = max(range(len(words)), key=lambda i: len(words[i].strip(".,!?—")))
+    for name, bg, ink, acc, soft in (("w", (255, 255, 255), (11, 46, 34), (18, 163, 111), (230, 240, 235)),
+                                     ("g", (11, 46, 34), (255, 255, 255), (60, 203, 143), (40, 75, 62))):
+        im = Image.new("RGB", (1080, 1920), bg); d = ImageDraw.Draw(im)
+        logo = Image.open(os.path.join(ROOT, "studio/assets/logo.png")).convert("RGBA").resize((64, 64))
+        mk = Image.new("L", (64, 64), 0); ImageDraw.Draw(mk).rounded_rectangle([0, 0, 63, 63], radius=16, fill=255)
+        im.paste(logo, (90, 120), mk)
+        d.text((172, 152), "eslarma", font=ImageFont.truetype(I + "Bold.otf", 30), fill=acc, anchor="lm")
+        d.line([(320, 152), (990, 152)], fill=soft, width=2)
+        size = 96
+        while True:
+            fl, fb = ImageFont.truetype(I + "Light.otf", size), ImageFont.truetype(I + "Bold.otf", size)
+            lines, cur, wsum = [], [], 0
+            for i, w in enumerate(words):
+                fw = (fb if i == key else fl).getlength(w + " ")
+                if cur and wsum + fw > 900:
+                    lines.append(cur); cur, wsum = [], 0
+                cur.append(i); wsum += fw
+            lines.append(cur)
+            if len(lines) <= 4 or size <= 60:
+                break
+            size -= 6
+        y = 270
+        for l in lines:
+            x = 90
+            for i in l:
+                f = fb if i == key else fl
+                d.text((x, y), words[i], font=f, fill=acc if i == key else ink)
+                x += f.getlength(words[i] + " ")
+            y += int(size * 1.1)
+        mk = Image.new("L", pic.size, 0); ImageDraw.Draw(mk).rounded_rectangle([0, 0, pic.width - 1, pic.height - 1], radius=44, fill=255)
+        im.paste(pic, (90, 1920 - 200 - pic.height), mk)
+        d.text((540, 1810), "Abdulloh domla", font=ImageFont.truetype(I + "SemiBold.otf", 32), fill=soft if name == "g" else (120, 140, 130), anchor="mm")
+        im.save(os.path.join(ROOT, "out", f"cover_{rid}_{name}.jpg"), quality=92)
+    print("brand covers ok")
+
+
 def make_cover(plan, jpg, rid):
     """1080x1920 cover: the first painting, darkened, with the title inside the 3:4 part that the profile grid shows"""
     from PIL import Image, ImageDraw, ImageEnhance, ImageFont
@@ -926,6 +986,11 @@ def cmd_render(src, video):
     json.dump(rplan, open(rp, "w"), ensure_ascii=False, indent=1)
     subprocess.run([sys.executable, "animate.py", rp], cwd=os.path.join(ROOT, "studio"), check=True)
     print("render ok", out)
+    if st.get("brand") == "1":
+        try:
+            brand_covers(plan, rid, rplan["video_only"], clean, dur)
+        except Exception as e:
+            print("brand covers failed:", str(e)[:200])
 
 
 def _md5_audio(p):
