@@ -108,8 +108,8 @@ DARK, MINT, ACC = (11, 46, 34), (60, 203, 143), (18, 163, 111)
 _lut, _endcard = None, None
 
 
-def brand_on():
-    return SET.get("brand") == "1"
+def brand_on():  # brand_video=0: the owner keeps the brand covers but not the brand colours inside the reel
+    return SET.get("brand") == "1" and SET.get("brand_video", "1") != "0"
 
 
 def brand_grade(fr, k=0.38):
