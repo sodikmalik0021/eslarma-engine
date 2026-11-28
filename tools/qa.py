@@ -170,6 +170,8 @@ def main(src, source):
         strong = rmodel and not rmodel.startswith("local:") and "lite" not in rmodel
         c = plan.get("clip") or {}
         clip_ok = c.get("min", 0) >= 0.20 and c.get("mean", 0) >= 0.26
+        if not c and plan.get("meanings"):  # drawn scenes (no paintings): the planner's own meaning check is the objective part
+            clip_ok = len(plan.get("unclear") or []) <= 0.3 * len(plan["meanings"])
         bad1 = g("words_match").get("bad_shots") or []
         put(1, "words = picture", g("words_match").get("ok") and score >= 8 and len(bad1) <= 1 and (strong or clip_ok)
             and not any("fallback" in f or "repetitive" in f for f in flags),
