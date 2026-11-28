@@ -1,56 +1,56 @@
 [
  {
   "name": "p00",
-  "prompt": "old white sedan car parked in front of a small mosque with a minaret and a leafy tree",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap running inside a giant wooden hamster wheel in a quiet town square",
   "motion": "",
-  "palette": "brand",
-  "style": "bashar",
-  "seed": 7,
-  "alts": []
- },
- {
-  "name": "p01",
-  "prompt": "man in green chapan and white skullcap kneeling on a prayer mat in a simple room, seen from behind, window",
-  "motion": "",
-  "palette": "brand",
-  "style": "bashar",
-  "seed": 8,
-  "alts": []
- },
- {
-  "name": "p02",
-  "prompt": "winding road over golden hills with a small white car, poplar trees and flat-roof houses below",
-  "motion": "",
-  "palette": "brand",
-  "style": "bashar",
-  "seed": 9,
-  "alts": []
- },
- {
-  "name": "p03",
-  "prompt": "little girl in white hijab bringing a tea cup to her father sitting on a wooden tapchan under a grape vine pergola, teapot",
-  "motion": "",
-  "palette": "brand",
-  "style": "bashar",
-  "seed": 10,
-  "alts": []
- },
- {
-  "name": "p04",
-  "prompt": "A massive heavy iron padlock hanging on a closed wooden door of an old clay house in a quiet street",
-  "motion": "",
-  "palette": "brand",
-  "style": "bashar",
+  "palette": "golden",
+  "style": "bashar2",
   "seed": 11,
   "alts": []
  },
  {
-  "name": "p05",
-  "prompt": "An hourglass with sand on a low table in a calm Uzbek room with a suzani carpet",
+  "name": "p01",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap at a small phone shop counter reaching for a new smartphone, shop keeper behind the counter",
   "motion": "",
-  "palette": "brand",
-  "style": "bashar",
+  "palette": "golden",
+  "style": "bashar2",
   "seed": 12,
+  "alts": []
+ },
+ {
+  "name": "p02",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap standing beside a shiny new white car in a showroom, holding loan papers",
+  "motion": "",
+  "palette": "golden",
+  "style": "bashar2",
+  "seed": 13,
+  "alts": []
+ },
+ {
+  "name": "p03",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap sitting tired at an office desk, a stern boss standing behind him",
+  "motion": "",
+  "palette": "golden",
+  "style": "bashar2",
+  "seed": 14,
+  "alts": []
+ },
+ {
+  "name": "p04",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap walking away from a bank building carrying a heavy sack on his back",
+  "motion": "",
+  "palette": "golden",
+  "style": "bashar2",
+  "seed": 15,
+  "alts": []
+ },
+ {
+  "name": "p05",
+  "prompt": "Uzbek young man in a grey-green chapan coat and white skullcap standing in the evening street with a small suitcase in front of a locked house door",
+  "motion": "",
+  "palette": "golden",
+  "style": "bashar2",
+  "seed": 16,
   "alts": []
  }
 ]
