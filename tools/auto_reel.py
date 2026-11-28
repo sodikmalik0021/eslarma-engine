@@ -644,7 +644,7 @@ def settings():
 
 def art_style():
     try:
-        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "uzbek"
+        return json.load(open(os.path.join(ROOT, "data/state.json"), encoding="utf-8")).get("art_style") or "bashar"
     except Exception:
         return "uzbek"
 

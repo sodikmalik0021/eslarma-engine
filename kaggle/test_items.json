@@ -1,55 +1,55 @@
 [
  {
   "name": "p00",
-  "prompt": "A traditional Uzbek clay courtyard with a pile of heavy iron chains on the dusty ground.",
+  "prompt": "A traditional Uzbek ceramic bowl resting empty on a wooden table inside an old clay house",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 7,
   "alts": []
  },
  {
   "name": "p01",
-  "prompt": "A plastic blue ID card resting on a wooden counter inside a shop.",
+  "prompt": "A traditional wooden hoe leaning against a sunlit clay courtyard wall in Central Asia",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 8,
   "alts": []
  },
  {
   "name": "p02",
-  "prompt": "A rusted metal animal trap hidden among dry weeds on the ground.",
+  "prompt": "A massive heavy iron padlock hanging on a closed wooden door of an ancient building",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 9,
   "alts": []
  },
  {
   "name": "p03",
-  "prompt": "A neat stack of golden coins resting on a traditional ikat fabric.",
+  "prompt": "A wrapped gift box tied with a simple string sitting on a woven suzani cloth",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 10,
   "alts": []
  },
  {
   "name": "p04",
-  "prompt": "A thick hemp rope noose hanging ominously from a wooden ceiling beam.",
+  "prompt": "A modern metallic door handle shining brightly under the afternoon sun on a wooden door",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 11,
   "alts": []
  },
  {
   "name": "p05",
-  "prompt": "A dead-end narrow alleyway enclosed by high impassable clay walls.",
+  "prompt": "An antique mechanical hourglass with white sand slowly flowing through the glass bulb",
   "motion": "",
-  "palette": "rose",
-  "style": "uzbek",
+  "palette": "brand",
+  "style": "bashar",
   "seed": 12,
   "alts": []
  }
